@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Apex Motors — Apex GT</title>
+    <meta name="description" content="Apex GT. Built around control, performance and the feeling of freedom." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Syne:wght@600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <!-- LOADER: covers the page until the 3D model has downloaded -->
+    <div class="loader" id="loader" role="status" aria-live="polite">
+      <div class="loader__brand">APEX</div>
+      <div class="loader__bar"><span id="loader-bar"></span></div>
+      <div class="loader__text" id="loader-text">Loading 0%</div>
+    </div>
+
+    <!-- The WebGL canvas sits fixed behind all the content -->
+    <canvas class="webgl" id="webgl" aria-hidden="true"></canvas>
+
+    <header class="nav">
+      <a href="#hero" class="nav__logo">APEX<span>MOTORS</span></a>
+      <nav class="nav__links" aria-label="Main">
+        <a href="#performance">Performance</a>
+        <a href="#design">Design</a>
+        <a href="#colors">Colors</a>
+        <a href="#specs">Specs</a>
+      </nav>
+      <a href="#reserve" class="btn btn--small">Reserve</a>
+    </header>
+
+    <main id="story">
+      <!-- 1. HERO -->
+      <section class="section section--hero" id="hero" data-scene="0">
+        <div class="hero__inner">
+          <p class="eyebrow" data-reveal>2027 Apex GT</p>
+          <h1 class="hero__title">
+            <span class="line"><span data-hero-line>Built for</span></span>
+            <span class="line"><span data-hero-line class="accent-text">control.</span></span>
+          </h1>
+          <p class="hero__sub" data-reveal>
+            Performance, precision and the feeling of freedom behind the wheel.
+          </p>
+        </div>
+        <div class="scroll-hint" aria-hidden="true"><span></span>Scroll</div>
+      </section>
+
+      <!-- 2. PERFORMANCE -->
+      <section class="section section--left" id="performance" data-scene="1">
+        <div class="panel">
+          <p class="eyebrow" data-reveal>01 — Performance</p>
+          <h2 data-reveal>Every number,<br />engineered.</h2>
+          <div class="stats">
+            <div class="stat" data-reveal>
+              <span class="stat__value"><span data-count="2.9" data-decimals="1">0</span><small>s</small></span>
+              <span class="stat__label">0–100 km/h</span>
+            </div>
+            <div class="stat" data-reveal>
+              <span class="stat__value"><span data-count="710">0</span><small>hp</small></span>
+              <span class="stat__label">V8 twin-turbo</span>
+            </div>
+            <div class="stat" data-reveal>
+              <span class="stat__value"><span data-count="330">0</span><small>km/h</small></span>
+              <span class="stat__label">Top speed</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3. DESIGN -->
+      <section class="section section--right" id="design" data-scene="2">
+        <div class="panel">
+          <p class="eyebrow" data-reveal>02 — Design</p>
+          <h2 data-reveal>Sculpted<br />by air.</h2>
+          <p data-reveal>
+            Every surface is shaped in the wind tunnel. Active aero pushes the car into the road
+            at speed and gets out of the way when you cruise.
+          </p>
+        </div>
+      </section>
+
+      <!-- 4. COLORS -->
+      <section class="section section--left" id="colors" data-scene="3">
+        <div class="panel">
+          <p class="eyebrow" data-reveal>03 — Make it yours</p>
+          <h2 data-reveal>Pick your<br />color.</h2>
+          <div class="swatches" role="group" aria-label="Paint color" data-reveal>
+            <!-- data-color is read by main.js and applied to the car's paint -->
+            <button class="swatch" data-color="#b3121f" data-name="Rosso Apex" aria-pressed="true" aria-label="Rosso Apex" style="--c:#b3121f"></button>
+            <button class="swatch" data-color="#1c2f5a" data-name="Midnight Blue" aria-pressed="false" aria-label="Midnight Blue" style="--c:#1c2f5a"></button>
+            <button class="swatch" data-color="#0f4a35" data-name="Racing Green" aria-pressed="false" aria-label="Racing Green" style="--c:#0f4a35"></button>
+            <button class="swatch" data-color="#e7e4dc" data-name="Pearl White" aria-pressed="false" aria-label="Pearl White" style="--c:#e7e4dc"></button>
+            <button class="swatch" data-color="#26272b" data-name="Graphite" aria-pressed="false" aria-label="Graphite" style="--c:#26272b"></button>
+            <button class="swatch" data-color="#e8a200" data-name="Solar Yellow" aria-pressed="false" aria-label="Solar Yellow" style="--c:#e8a200"></button>
+          </div>
+          <p class="swatch-name" id="swatch-name" aria-live="polite">Rosso Apex</p>
+        </div>
+      </section>
+
+      <!-- 5. SPECS -->
+      <section class="section section--right" id="specs" data-scene="4">
+        <div class="panel panel--wide">
+          <p class="eyebrow" data-reveal>04 — Specifications</p>
+          <h2 data-reveal>The details.</h2>
+          <dl class="specs">
+            <div data-reveal><dt>Engine</dt><dd>4.0L V8 twin-turbo</dd></div>
+            <div data-reveal><dt>Torque</dt><dd>770 Nm</dd></div>
+            <div data-reveal><dt>Gearbox</dt><dd>8-speed dual-clutch</dd></div>
+            <div data-reveal><dt>Weight</dt><dd>1,435 kg</dd></div>
+            <div data-reveal><dt>Drive</dt><dd>Rear-wheel</dd></div>
+            <div data-reveal><dt>Brakes</dt><dd>Carbon-ceramic</dd></div>
+          </dl>
+        </div>
+      </section>
+
+      <!-- 6. CTA -->
+      <section class="section section--cta" id="reserve" data-scene="5">
+        <div class="cta">
+          <p class="eyebrow" data-reveal>Limited to 500 units</p>
+          <h2 class="cta__title" data-reveal>Your drive<br />starts here.</h2>
+          <div class="cta__buttons" data-reveal>
+            <a href="#reserve" class="btn">Reserve yours</a>
+            <a href="#specs" class="btn btn--ghost">Book a test drive</a>
+          </div>
+        </div>
+        <footer class="footer">
+          <span>© 2026 Apex Motors — a fictional brand for a demo.</span>
+          <span>
+            3D model: Ferrari 458 Italia by
+            <a href="https://sketchfab.com/models/57bf6cc56931426e87494f554df1dab6" target="_blank" rel="noopener">vicent091036</a>
+            (via three.js examples)
+          </span>
+        </footer>
+      </section>
+    </main>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
