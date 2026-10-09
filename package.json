@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:artifact": "vite build && node scripts/artifact-page.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

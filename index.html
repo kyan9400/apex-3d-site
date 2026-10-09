@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#07070a" />
     <title>Apex Motors — Apex GT</title>
     <meta name="description" content="Apex GT. Built around control, performance and the feeling of freedom." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -14,20 +15,46 @@
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
-    <!-- LOADER: covers the page until the 3D model has downloaded -->
-    <div class="loader" id="loader" role="status" aria-live="polite">
-      <div class="loader__brand">APEX</div>
-      <div class="loader__bar"><span id="loader-bar"></span></div>
-      <div class="loader__text" id="loader-text">Loading 0%</div>
+    <!-- First thing a keyboard user reaches: jump past the navigation to the content -->
+    <a class="skip-link" href="#story">Skip to content</a>
+
+    <!-- LOADER: covers the page until the 3D model is ready, then lifts like a curtain.
+         The letters and the curtain are pure CSS animations, so they keep moving
+         even while the browser is busy preparing the 3D model -->
+    <div class="loader" id="loader">
+      <div class="loader__inner">
+        <div class="loader__brand" aria-hidden="true"><span>A</span><span>P</span><span>E</span><span>X</span></div>
+        <p class="loader__text" id="loader-text" role="status">Loading the car</p>
+      </div>
+      <div class="loader__count" aria-hidden="true"><span id="loader-count">0</span>%</div>
+      <div class="loader__bar" aria-hidden="true"><span id="loader-bar"></span></div>
     </div>
+
+    <!-- Background layers (behind the transparent 3D canvas) -->
+    <div class="backdrop" aria-hidden="true"></div>
+    <div class="bg-word" aria-hidden="true"><span>APEX GT</span></div>
 
     <!-- The WebGL canvas sits fixed behind all the content -->
     <canvas class="webgl" id="webgl" aria-hidden="true"></canvas>
+
+    <!-- Scroll progress and the custom cursor (the section dots come after the header, for Tab order) -->
+    <div class="progress" aria-hidden="true"><span></span></div>
+    <div class="cursor" aria-hidden="true"><span class="cursor__label"></span></div>
+
+    <!-- Shown only when the system asks for reduced motion (see motion.js) -->
+    <section class="motion-toast" id="motion-toast" aria-labelledby="motion-toast-text" hidden>
+      <p id="motion-toast-text">Your system asks for reduced motion, so the 3D effects are calm.</p>
+      <div class="motion-toast__actions">
+        <button class="btn btn--small" id="motion-full" type="button">Turn on full motion</button>
+        <button class="btn btn--small btn--ghost" id="motion-dismiss" type="button">Keep it calm</button>
+      </div>
+    </section>
 
     <header class="nav">
       <a href="#hero" class="nav__logo">APEX<span>MOTORS</span></a>
       <nav class="nav__links" aria-label="Main">
         <a href="#performance">Performance</a>
+        <a href="#launch">Launch</a>
         <a href="#design">Design</a>
         <a href="#colors">Colors</a>
         <a href="#specs">Specs</a>
@@ -35,16 +62,27 @@
       <a href="#reserve" class="btn btn--small">Reserve</a>
     </header>
 
+    <!-- Section dots: fixed on the right, so their place in the HTML only sets the Tab order -->
+    <nav class="dots" aria-label="Sections">
+      <a href="#hero" aria-current="true"><span class="sr-only">Intro</span></a>
+      <a href="#performance"><span class="sr-only">Performance</span></a>
+      <a href="#launch"><span class="sr-only">Launch control</span></a>
+      <a href="#design"><span class="sr-only">Design</span></a>
+      <a href="#colors"><span class="sr-only">Colors</span></a>
+      <a href="#specs"><span class="sr-only">Specs</span></a>
+      <a href="#reserve"><span class="sr-only">Reserve</span></a>
+    </nav>
+
     <main id="story">
       <!-- 1. HERO -->
       <section class="section section--hero" id="hero" data-scene="0">
         <div class="hero__inner">
-          <p class="eyebrow" data-reveal>2027 Apex GT</p>
+          <p class="eyebrow">2027 Apex GT</p>
           <h1 class="hero__title">
             <span class="line"><span data-hero-line>Built for</span></span>
             <span class="line"><span data-hero-line class="accent-text">control.</span></span>
           </h1>
-          <p class="hero__sub" data-reveal>
+          <p class="hero__sub">
             Performance, precision and the feeling of freedom behind the wheel.
           </p>
         </div>
@@ -55,7 +93,7 @@
       <section class="section section--left" id="performance" data-scene="1">
         <div class="panel">
           <p class="eyebrow" data-reveal>01 — Performance</p>
-          <h2 data-reveal>Every number,<br />engineered.</h2>
+          <h2 data-split>Every number,<br />engineered.</h2>
           <div class="stats">
             <div class="stat" data-reveal>
               <span class="stat__value"><span data-count="2.9" data-decimals="1">0</span><small>s</small></span>
@@ -73,11 +111,38 @@
         </div>
       </section>
 
-      <!-- 3. DESIGN -->
-      <section class="section section--right" id="design" data-scene="2">
+      <!-- 3. LAUNCH CONTROL: a tall section whose content sticks to the screen.
+           Scrolling through it drives the speed (main.js → LAUNCH CONTROL). -->
+      <section class="launch" id="launch" data-scene="2">
+        <div class="launch__sticky">
+          <div class="launch__hud">
+            <p class="eyebrow" data-reveal>02 — Launch control</p>
+            <h2 class="launch__title" data-split>Hold on.</h2>
+            <!-- instrument cluster: the speedometer + elapsed time and the 0–100 target -->
+            <div class="launch__cluster" data-reveal>
+              <div class="gauge" id="gauge">
+                <svg viewBox="0 0 200 200" aria-hidden="true">
+                  <circle class="gauge__track" cx="100" cy="100" r="86" />
+                  <g class="gauge__ticks"></g><!-- filled by main.js -->
+                  <circle class="gauge__fill" id="gauge-fill" cx="100" cy="100" r="86" />
+                </svg>
+                <div class="gauge__readout"><span class="gauge__speed" id="launch-speed">0</span><span class="gauge__unit">km/h</span></div>
+              </div>
+              <dl class="launch__meta">
+                <div><dt>Elapsed</dt><dd><b id="launch-time">0.0</b><small>s</small></dd></div>
+                <div><dt>Target</dt><dd><span class="launch__badge" id="launch-badge">0–100 km/h · 2.9 s</span></dd></div>
+              </dl>
+            </div>
+            <p class="launch__hint" id="launch-hint">Keep scrolling to accelerate</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- 4. DESIGN -->
+      <section class="section section--right" id="design" data-scene="3">
         <div class="panel">
-          <p class="eyebrow" data-reveal>02 — Design</p>
-          <h2 data-reveal>Sculpted<br />by air.</h2>
+          <p class="eyebrow" data-reveal>03 — Design</p>
+          <h2 data-split>Sculpted<br />by air.</h2>
           <p data-reveal>
             Every surface is shaped in the wind tunnel. Active aero pushes the car into the road
             at speed and gets out of the way when you cruise.
@@ -85,11 +150,12 @@
         </div>
       </section>
 
-      <!-- 4. COLORS -->
-      <section class="section section--left" id="colors" data-scene="3">
+      <!-- 5. COLORS (drag the car to spin it) -->
+      <section class="section section--left" id="colors" data-scene="4">
+        <div class="drag-zone" data-cursor="Drag" aria-hidden="true"></div>
         <div class="panel">
-          <p class="eyebrow" data-reveal>03 — Make it yours</p>
-          <h2 data-reveal>Pick your<br />color.</h2>
+          <p class="eyebrow" data-reveal>04 — Make it yours</p>
+          <h2 data-split>Pick your<br />color.</h2>
           <div class="swatches" role="group" aria-label="Paint color" data-reveal>
             <!-- data-color is read by main.js and applied to the car's paint -->
             <button class="swatch" data-color="#b3121f" data-name="Rosso Apex" aria-pressed="true" aria-label="Rosso Apex" style="--c:#b3121f"></button>
@@ -99,15 +165,15 @@
             <button class="swatch" data-color="#26272b" data-name="Graphite" aria-pressed="false" aria-label="Graphite" style="--c:#26272b"></button>
             <button class="swatch" data-color="#e8a200" data-name="Solar Yellow" aria-pressed="false" aria-label="Solar Yellow" style="--c:#e8a200"></button>
           </div>
-          <p class="swatch-name" id="swatch-name" aria-live="polite">Rosso Apex</p>
+          <p class="swatch-name"><span id="swatch-name" aria-live="polite">Rosso Apex</span><span class="drag-hint">Drag the car to rotate</span></p>
         </div>
       </section>
 
-      <!-- 5. SPECS -->
-      <section class="section section--right" id="specs" data-scene="4">
+      <!-- 6. SPECS -->
+      <section class="section section--right" id="specs" data-scene="5">
         <div class="panel panel--wide">
-          <p class="eyebrow" data-reveal>04 — Specifications</p>
-          <h2 data-reveal>The details.</h2>
+          <p class="eyebrow" data-reveal>05 — Specifications</p>
+          <h2 data-split>The details.</h2>
           <dl class="specs">
             <div data-reveal><dt>Engine</dt><dd>4.0L V8 twin-turbo</dd></div>
             <div data-reveal><dt>Torque</dt><dd>770 Nm</dd></div>
@@ -119,11 +185,11 @@
         </div>
       </section>
 
-      <!-- 6. CTA -->
-      <section class="section section--cta" id="reserve" data-scene="5">
+      <!-- 7. CTA -->
+      <section class="section section--cta" id="reserve" data-scene="6">
         <div class="cta">
           <p class="eyebrow" data-reveal>Limited to 500 units</p>
-          <h2 class="cta__title" data-reveal>Your drive<br />starts here.</h2>
+          <h2 class="cta__title" data-split>Your drive<br />starts here.</h2>
           <div class="cta__buttons" data-reveal>
             <a href="#reserve" class="btn">Reserve yours</a>
             <a href="#specs" class="btn btn--ghost">Book a test drive</a>
@@ -131,6 +197,7 @@
         </div>
         <footer class="footer">
           <span>© 2026 Apex Motors — a fictional brand for a demo.</span>
+          <button class="link-btn" id="motion-toggle" type="button">Reduce motion</button>
           <span>
             3D model: Ferrari 458 Italia by
             <a href="https://sketchfab.com/models/57bf6cc56931426e87494f554df1dab6" target="_blank" rel="noopener">vicent091036</a>

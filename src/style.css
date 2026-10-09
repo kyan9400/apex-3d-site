@@ -1,6 +1,9 @@
 /* ==========================================================
    DESIGN TOKENS
-   --accent is changed live by the color picker (main.js)
+   The color picker (setAccent in main.js) changes these live:
+     --accent     the paint color: button, badge and loader fills
+     --accent-hi  thin lines and small marks (lighter for very dark paints)
+     --accent-ink text on top of --accent (white or near-black)
    ========================================================== */
 :root {
   --bg: #07070a;
@@ -9,6 +12,7 @@
   --muted: #9a9aa3;
   --line: rgba(255, 255, 255, 0.12);
   --accent: #b3121f;
+  --accent-hi: #b3121f;
   --font-display: 'Syne', system-ui, sans-serif;
   --font-body: 'Inter', system-ui, sans-serif;
   --gutter: clamp(16px, 5vw, 72px);
@@ -23,6 +27,11 @@
 
 html {
   -webkit-text-size-adjust: 100%;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+  /* keep the scrollbar's space while the loader hides it: the canvas never resizes
+     (= no buffer reallocation + double draw) as the curtain lifts. Phones/macOS: no change */
+  scrollbar-gutter: stable;
 }
 
 /* Lenis smooth-scroll helper classes */
@@ -41,11 +50,14 @@ body {
   font-weight: 400;
   line-height: 1.6;
   overflow-x: hidden;
-  /* A soft spotlight behind the car. The canvas is transparent, so this shows through. */
-  background:
-    radial-gradient(ellipse 70% 55% at 50% 58%, #1d1d26 0%, transparent 70%),
-    var(--bg);
-  background-attachment: fixed;
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--accent-ink, #fff);
 }
 
 body.is-loading {
@@ -61,51 +73,157 @@ a {
   outline-offset: 3px;
 }
 
+/* the content focused by the skip link needs no ring around the whole screen */
+main[tabindex='-1']:focus,
+section[tabindex='-1']:focus {
+  outline: none;
+}
+
+/* focus scrolling clears the fixed nav */
+a,
+button {
+  scroll-margin-block: 96px 24px;
+}
+
+/* no grey flash when tapping on phones (they have their own pressed styles) */
+.swatch,
+.btn,
+.link-btn,
+.drag-zone {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Skip link: hidden above the screen until a keyboard user tabs to it */
+.skip-link {
+  position: fixed;
+  left: 16px;
+  top: 12px;
+  z-index: 110;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: var(--text);
+  color: var(--bg);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  transform: translateY(-200%);
+}
+.skip-link:focus-visible {
+  transform: none;
+}
+
 /* ==========================================================
    LOADER
    ========================================================== */
+/* Everything here animates only transform and opacity, so it keeps running
+   smoothly while the main thread is busy with the 3D model. */
 .loader {
   position: fixed;
   inset: 0;
   z-index: 100;
   display: grid;
-  place-content: center;
-  justify-items: center;
-  gap: 18px;
+  place-items: center;
+  padding-inline: 24px; /* long error messages never touch the edges of a narrow phone */
   background: var(--bg);
-  transition: opacity 0.8s ease, visibility 0.8s;
+  touch-action: none;
+  /* 0.15s delay: the content leaves first, then the curtain lifts */
+  transition: transform 1.1s cubic-bezier(0.77, 0, 0.18, 1) 0.15s, visibility 1.1s 0.15s;
 }
 .loader.is-done {
-  opacity: 0;
+  transform: translateY(-100%);
   visibility: hidden;
 }
+.loader__inner {
+  display: grid;
+  justify-items: center;
+  gap: 18px;
+}
+.loader__inner,
+.loader__count {
+  transition: transform 0.5s cubic-bezier(0.7, 0, 0.84, 0), opacity 0.4s ease;
+}
+.loader.is-done .loader__inner,
+.loader.is-done .loader__count {
+  transform: translateY(-30px);
+  opacity: 0;
+}
+/* Brand: each letter rises from behind a mask (transform only = runs on the GPU).
+   Fill mode 'backwards' (not 'both'): once finished, the keyframes let go of the
+   element, so they never block the .is-done transitions above. */
 .loader__brand {
+  display: flex;
+  overflow: hidden;
   font-family: var(--font-display);
   font-weight: 800;
   font-size: 28px;
+  line-height: 1.2;
   letter-spacing: 0.4em;
   padding-left: 0.4em;
 }
-.loader__bar {
-  width: 180px;
-  height: 2px;
-  background: var(--line);
-  overflow: hidden;
+.loader__brand span {
+  display: inline-block;
+  animation: loaderRise 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
 }
-.loader__bar span {
-  display: block;
-  height: 100%;
-  width: 0%;
-  background: var(--accent);
-  transition: width 0.2s ease;
+.loader__brand span:nth-child(2) {
+  animation-delay: 0.08s;
+}
+.loader__brand span:nth-child(3) {
+  animation-delay: 0.16s;
+}
+.loader__brand span:nth-child(4) {
+  animation-delay: 0.24s;
+}
+@keyframes loaderRise {
+  from { transform: translateY(110%); }
 }
 .loader__text {
+  margin: 0;
   font-size: 12px;
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: var(--muted);
   max-width: 320px;
   text-align: center;
+  animation: loaderFade 0.8s 0.35s backwards;
+}
+/* Big counter in the corner */
+.loader__count {
+  position: absolute;
+  right: var(--gutter);
+  bottom: calc(28px + env(safe-area-inset-bottom, 0px));
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(56px, 12vw, 160px);
+  line-height: 0.8;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  animation: loaderFade 0.8s 0.3s backwards;
+}
+@keyframes loaderFade {
+  from { opacity: 0; transform: translateY(20px); }
+}
+/* Progress = a full-width line on the curtain's bottom edge; it lifts WITH the curtain.
+   It grows with scaleX (cheap), not width (which re-lays out the page on every update). */
+.loader__bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--line);
+}
+.loader__bar span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.3s ease;
+}
+/* load failed: keep the message, drop the counter and progress line */
+.loader.is-error .loader__count,
+.loader.is-error .loader__bar {
+  opacity: 0;
 }
 
 /* ==========================================================
@@ -116,6 +234,10 @@ a {
   inset: 0;
   width: 100%;
   height: 100%;
+  /* large viewport: a sliding phone toolbar never resizes (stretches) the canvas.
+     Old browsers without lvh keep height: 100% (cssTarget in vite.config.js stops
+     the build from deleting this fallback) */
+  height: 100lvh;
   z-index: 0;
   display: block;
   outline: none;
@@ -183,10 +305,8 @@ a {
   letter-spacing: 0.04em;
   text-decoration: none;
   border: 1px solid transparent;
-  transition: transform 0.2s ease, background-color 0.6s ease, border-color 0.2s;
-}
-.btn:hover {
-  transform: translateY(-2px);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14); /* navy and graphite pills still read on black */
+  transition: translate 0.25s cubic-bezier(0.22, 1, 0.36, 1), background-color 0.6s ease, border-color 0.2s, color 0.2s;
 }
 .btn--small {
   min-height: 40px;
@@ -197,9 +317,19 @@ a {
   background: transparent;
   color: var(--text);
   border-color: var(--line);
+  box-shadow: none;
 }
-.btn--ghost:hover {
-  border-color: var(--text);
+/* real hover only: on phones :hover sticks after a tap (a lifted button, a swollen swatch) */
+@media (hover: hover) {
+  .btn:hover {
+    translate: 0 -2px; /* 'translate' adds to GSAP's magnetic transform instead of fighting it */
+  }
+  .btn--ghost:hover {
+    border-color: var(--text);
+  }
+  .swatch:hover {
+    transform: scale(1.08);
+  }
 }
 
 /* ==========================================================
@@ -219,6 +349,7 @@ a {
 }
 .section--right {
   justify-content: flex-end;
+  padding-right: calc(var(--gutter) + 28px); /* room for the section dots */
 }
 
 .eyebrow {
@@ -227,9 +358,19 @@ a {
   font-weight: 500;
   letter-spacing: 0.25em;
   text-transform: uppercase;
-  /* lightened so small text stays readable whatever paint is picked */
-  color: color-mix(in srgb, var(--accent) 60%, white);
-  transition: color 0.6s ease;
+  /* near-white label + a paint-colored hairline: readable on any paint */
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: rgba(242, 241, 238, 0.72);
+}
+.eyebrow::before {
+  content: '';
+  flex: none;
+  width: 28px;
+  height: 1px;
+  background: var(--accent-hi);
+  transition: background-color 0.6s ease;
 }
 
 h1,
@@ -241,25 +382,31 @@ h2 {
   margin: 0 0 24px;
 }
 h2 {
-  font-size: clamp(40px, 6vw, 84px);
+  /* sized to fit inside the cards (each split word is unbreakable) */
+  font-size: clamp(34px, 4vw, 60px);
 }
 
 .panel {
-  max-width: 460px;
-  padding: 32px;
+  max-width: min(520px, 40vw);
+  padding: 40px;
   border-radius: 20px;
-  /* Glass card so text stays readable over the 3D scene */
-  background: rgba(10, 10, 14, 0.45);
+  /* Tinted card so text stays readable over the 3D scene. No backdrop-filter:
+     blurring a canvas that redraws every frame is very expensive. */
+  background: linear-gradient(160deg, rgba(20, 20, 27, 0.86), rgba(9, 9, 13, 0.82));
   border: 1px solid var(--line);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 30px 60px -30px rgba(0, 0, 0, 0.8);
 }
 .panel--wide {
-  max-width: 560px;
+  max-width: min(600px, 46vw);
 }
-.panel p {
+/* :where() adds no specificity, so classed paragraphs (.eyebrow, .swatch-name) keep their own styles */
+:where(.panel) p {
   color: var(--muted);
   margin: 0;
+}
+.hero__sub,
+:where(.panel) p {
+  text-wrap: pretty; /* no lonely last word */
 }
 
 /* HERO */
@@ -267,8 +414,11 @@ h2 {
   align-items: flex-end;
   padding-bottom: 14vh;
 }
+.hero__inner {
+  will-change: transform, opacity; /* own GPU layer: the scrubbed scroll-out never repaints the 168px title */
+}
 .hero__title {
-  font-size: clamp(56px, 11vw, 168px);
+  font-size: clamp(40px, 11vw, 168px);
   margin-bottom: 20px;
 }
 .hero__title .line {
@@ -280,8 +430,15 @@ h2 {
   display: inline-block;
 }
 .accent-text {
-  color: color-mix(in srgb, var(--accent) 80%, white);
+  color: var(--accent-hi);
   transition: color 0.6s ease;
+}
+/* lighter tint where color-mix() works. It has to sit in @supports: a second `color:` line
+   with var() inside always counts as valid, so it would wipe out the plain line above */
+@supports (color: color-mix(in srgb, red, red)) {
+  .accent-text {
+    color: color-mix(in srgb, var(--accent-hi) 80%, white);
+  }
 }
 .hero__sub {
   max-width: 420px;
@@ -360,7 +517,7 @@ h2 {
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  border: 2px solid var(--line);
+  border: 2px solid rgba(255, 255, 255, 0.35); /* dark paints (navy, graphite) still stand out from the card */
   background:
     radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.55), transparent 42%),
     var(--c);
@@ -368,18 +525,24 @@ h2 {
   padding: 0;
   transition: transform 0.2s ease, border-color 0.2s;
 }
-.swatch:hover {
-  transform: scale(1.08);
-}
 .swatch[aria-pressed='true'] {
   border-color: var(--text);
   box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.08);
 }
 .swatch-name {
-  margin-top: 18px !important;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-top: 20px;
   font-size: 13px;
   letter-spacing: 0.15em;
   text-transform: uppercase;
+}
+.drag-hint {
+  color: var(--muted);
+  letter-spacing: 0.1em;
+  font-size: 11px;
 }
 
 /* SPECS */
@@ -435,15 +598,475 @@ h2 {
 }
 
 /* ==========================================================
-   MOBILE: text sits low on the screen so the car stays visible above it
+   BACKGROUND LAYERS (behind the transparent canvas)
+   Fixed elements get their own GPU layer, so scrolling never repaints them.
    ========================================================== */
-@media (max-width: 760px) {
+.backdrop {
+  position: fixed;
+  inset: 0;
+  height: 100lvh; /* sliding phone toolbars don't re-centre it */
+  z-index: -2;
+  background: radial-gradient(ellipse 70% 55% at 50% 58%, #1d1d26 0%, transparent 70%);
+  pointer-events: none;
+}
+.bg-word {
+  position: fixed;
+  inset: 0;
+  height: 100lvh; /* sliding phone toolbars don't re-centre (and re-draw) the giant word */
+  z-index: -1;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  pointer-events: none;
+}
+.bg-word span {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 26vw;
+  line-height: 1;
+  white-space: nowrap;
+  color: transparent;
+  -webkit-text-stroke: 1px rgba(255, 255, 255, 0.07);
+  will-change: transform;
+}
+
+/* ==========================================================
+   PROGRESS BAR, SECTION DOTS, CURSOR, GRAIN
+   ========================================================== */
+.progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  z-index: 20;
+  pointer-events: none;
+}
+.progress span {
+  display: block;
+  height: 100%;
+  background: var(--accent-hi);
+  transform: scaleX(0);
+  transform-origin: left;
+  will-change: transform;
+  transition: background-color 0.6s ease;
+}
+
+.dots {
+  position: fixed;
+  right: calc(var(--gutter) / 2 - 6px);
+  top: 50%;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transform: translateY(-50%);
+}
+.dots a {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+}
+.dots a::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--muted);
+  opacity: 0.8;
+  transition: transform 0.3s ease, opacity 0.3s, background-color 0.3s;
+}
+.dots a:hover::before {
+  opacity: 1;
+}
+.dots a[aria-current='true']::before {
+  opacity: 1;
+  background: var(--text);
+  transform: scale(1.6);
+}
+
+/* Launch tuck (main.js fades the nav and dots out): no clicks while they are hidden,
+   and KEYBOARD focus inside brings them back (a focused link must never be invisible).
+   :has(:focus-visible) ignores mouse clicks, so a clicked nav link doesn't keep the nav up. */
+.chrome-tucked .nav,
+.chrome-tucked .dots {
+  pointer-events: none;
+}
+.nav:has(:focus-visible) {
+  opacity: 1 !important; /* !important beats GSAP's inline style */
+  transform: none !important;
+  pointer-events: auto;
+}
+.dots:has(:focus-visible) {
+  opacity: 1 !important; /* no transform override: .dots centres itself with translateY(-50%) */
+  pointer-events: auto;
+}
+/* browsers without :has() (Firefox before 121): any focus inside brings them back */
+@supports not selector(:has(a)) {
+  .nav:focus-within {
+    opacity: 1 !important;
+    transform: none !important;
+    pointer-events: auto;
+  }
+  .dots:focus-within {
+    opacity: 1 !important;
+    pointer-events: auto;
+  }
+}
+
+.cursor {
+  display: none;
+}
+.has-cursor .cursor {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  margin: -32px 0 0 -32px;
+  border-radius: 50%;
+  pointer-events: none;
+  will-change: transform;
+}
+/* The ring is a pseudo-element that SCALES on hover (64px box, drawn at 36px
+   when idle). Scaling is GPU-only; growing width/height would re-layout. */
+.has-cursor .cursor::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1.5px solid rgba(255, 255, 255, 0.6);
+  border-radius: 50%;
+  transform: scale(0.5625);
+  transition: transform 0.3s ease, background-color 0.3s, border-color 0.3s;
+}
+.has-cursor .cursor.is-hover::before {
+  transform: scale(1);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.9);
+}
+.cursor::after {
+  content: '';
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--text);
+}
+.cursor > span {
+  /* the label only gets a size while hovering a link with data-cursor */
+  font-size: 0;
+}
+.has-cursor .cursor {
+  transition: opacity 0.3s;
+}
+.has-cursor .cursor.is-hover .cursor__label {
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+.has-cursor .cursor.is-hidden {
+  opacity: 0;
+}
+
+.grain {
+  position: fixed;
+  inset: 0;
+  z-index: 0; /* after the canvas in the DOM, so it still covers the car but stays under #story (z 1) and the nav (z 10) */
+  pointer-events: none;
+  opacity: 0.045;
+  background-size: 128px;
+}
+
+.fps-meter {
+  position: fixed;
+  left: 12px;
+  bottom: 12px;
+  z-index: 200;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.75);
+  color: #9f9;
+  font: 12px/1.2 ui-monospace, monospace;
+  pointer-events: none;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Split headings: each word slides up from behind its own mask */
+.word {
+  display: inline-block;
+  overflow: hidden;
+  vertical-align: top;
+  /* the mask reaches below the line so descenders (g, y, p) are not cut off */
+  padding-bottom: 0.18em;
+  margin-bottom: -0.18em;
+}
+.word__inner {
+  display: inline-block;
+  transform-origin: left bottom;
+}
+
+/* ==========================================================
+   LAUNCH CONTROL — a 320vh section; the HUD sticks to the screen while
+   main.js turns scroll progress into speed
+   ========================================================== */
+.launch {
+  position: relative;
+  height: 320vh;
+}
+.launch__sticky {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  height: 100svh;
+  display: flex;
+  padding: 96px var(--gutter);
+}
+.launch__hud {
+  /* margin-block: auto centres the HUD vertically. Unlike align-items: center, a HUD taller
+     than the screen overflows downwards, never up under the nav (works in every browser) */
+  margin-block: auto;
+  position: relative;
+  isolation: isolate; /* keeps the scrim below inside the HUD */
+  display: grid;
+  gap: 18px;
+  justify-items: start;
+}
+/* Static scrim behind the desktop HUD: painted once, keeps the text readable over the speed streaks */
+.launch__hud::before {
+  content: '';
+  position: absolute;
+  inset: -48px -72px;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(closest-side, rgba(7, 7, 10, 0.6), transparent);
+}
+/* Instrument cluster: speedometer on the left, elapsed time + target on the right */
+.launch__cluster {
+  display: flex;
+  align-items: center;
+  gap: clamp(20px, 3vw, 44px);
+}
+.launch__title {
+  font-size: clamp(44px, 7vw, 104px);
+  margin: 0;
+}
+.launch__hud .eyebrow {
+  margin-bottom: 0; /* the grid gap already spaces it; the extra 16px left it floating above the title */
+}
+.gauge {
+  position: relative;
+  flex: none;
+  width: clamp(180px, 22vw, 260px);
+  aspect-ratio: 1;
+  max-width: 100%;
+  isolation: isolate;
+  contain: layout paint; /* the per-frame speed and arc updates stay inside this box */
+}
+/* Instrument face: a dark disc behind the dial. Never put blur/drop-shadow filters on .gauge__fill
+   (it changes on every scroll step, and a filter would be re-computed each time). */
+.gauge::before {
+  content: '';
+  position: absolute;
+  inset: 4%;
+  z-index: -1;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(7, 7, 10, 0.88) 72%, rgba(7, 7, 10, 0));
+}
+.gauge svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(135deg); /* the 270° arc opens at the bottom */
+}
+.gauge circle {
+  fill: none;
+  stroke-width: 6;
+  stroke-linecap: round;
+  /* circumference = 2π·86 ≈ 540.4; we draw 75% of it (405.3) as a 270° arc */
+  stroke-dasharray: 405.3 540.4;
+}
+.gauge__track {
+  stroke: rgba(255, 255, 255, 0.1);
+}
+.gauge__fill {
+  stroke: var(--accent-hi);
+  stroke-dashoffset: 405.3;
+  transition: stroke 0.6s ease;
+}
+/* Ticks every 30 km/h + an accent mark at 100 km/h (drawn by main.js) */
+.gauge__ticks line {
+  stroke: rgba(255, 255, 255, 0.3);
+  stroke-width: 1.5;
+}
+.gauge__ticks .gauge__mark {
+  stroke: var(--accent-hi);
+  stroke-width: 3;
+}
+.gauge__readout {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+}
+/* Inter 300 is already loaded; its tabular (equal-width) figures keep the number steady while it counts */
+.gauge__speed {
+  font-family: var(--font-body);
+  font-weight: 300;
+  font-size: clamp(56px, 6vw, 84px);
+  line-height: 1;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+  transition: color 0.3s;
+}
+/* Redline: from 300 km/h the number turns red. A fixed red, not the paint: plain Rosso is too
+   dark on the dial (2.9:1), white paint would show no change and graphite would look disabled.
+   #ff4646 is 6:1 on the dark face */
+.gauge.is-redline .gauge__speed {
+  color: #ff4646;
+}
+.gauge__unit {
+  font-size: 12px;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.launch__meta {
+  display: grid;
+  gap: 20px;
+  margin: 0;
+  contain: layout; /* the changing time never re-lays out the rest of the page */
+}
+.launch__meta dt {
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.launch__meta dd {
+  margin: 6px 0 0;
+}
+.launch__meta b {
+  font: 300 clamp(32px, 3.2vw, 48px) / 1 var(--font-body);
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.launch__meta small {
+  margin-left: 4px;
+  font-size: 14px;
+  color: var(--muted);
+}
+/* Target badge: readable before the hit (dashed outline), filled with the paint when 100 km/h is reached */
+.launch__badge {
+  display: inline-block;
+  padding: 6px 12px;
+  border: 1px dashed rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+  transition: background-color 0.4s, color 0.4s, border-color 0.4s;
+}
+.launch__badge.is-hit {
+  background: var(--accent);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: var(--accent-ink, #fff);
+  animation: badgeHit 0.5s cubic-bezier(0.22, 1, 0.36, 1); /* one pulse */
+}
+@keyframes badgeHit {
+  40% { transform: scale(1.08); }
+}
+.launch__hint {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--muted);
+  transition: opacity 0.4s;
+}
+/* Short desktop/laptop windows (1280×600 etc.): a smaller HUD so it all fits under the nav */
+@media (min-width: 761px) and (max-height: 720px) {
+  .launch__sticky {
+    padding-block: 84px 24px;
+  }
+  .launch__title {
+    font-size: clamp(36px, min(5vw, 9vh), 72px);
+  }
+  .launch__hud {
+    gap: 12px;
+  }
+  .gauge {
+    width: clamp(130px, 30vh, 200px);
+  }
+  .gauge__speed {
+    font-size: clamp(40px, 10vh, 64px); /* shrinks with the dial so the number stays inside the ticks */
+  }
+}
+
+/* Drag area in the colors section (sits behind the panel) */
+#colors .panel {
+  position: relative;
+  z-index: 1;
+}
+.drag-zone {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  cursor: grab;
+  touch-action: pan-y pinch-zoom; /* vertical swipes still scroll the page and pinch still zooms on phones */
+}
+.drag-zone:active {
+  cursor: grabbing;
+}
+.has-cursor .drag-zone {
+  cursor: none;
+}
+.has-cursor,
+.has-cursor a,
+.has-cursor button {
+  cursor: none;
+}
+
+/* ==========================================================
+   MOBILE + PORTRAIT TABLETS: text sits low on the screen so the car stays
+   visible above it. (max-aspect-ratio: 1/1) matches isPortrait in main.js,
+   which centres the car instead of sliding it sideways.
+   ========================================================== */
+@media (max-width: 760px), (max-aspect-ratio: 1/1) {
   .nav__links {
     display: none;
   }
   .section {
     align-items: flex-end;
     padding: 96px 16px 40px;
+  }
+  .section--cta {
+    align-items: stretch;
+  }
+  .hero__title {
+    font-size: clamp(44px, 15vw, 96px);
+  }
+  .cta__title {
+    font-size: clamp(38px, 12vw, 80px);
+  }
+  .cta__buttons .btn {
+    flex: 1 1 auto;
   }
   .section--right {
     justify-content: flex-start;
@@ -471,11 +1094,169 @@ h2 {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation: none !important;
-    transition-duration: 0.01ms !important;
+.reduce-motion *,
+.reduce-motion *::before,
+.reduce-motion *::after {
+  animation: none !important;
+  transition-duration: 0.01ms !important;
+}
+
+/* same breakpoint as above (phones + portrait tablets) */
+@media (max-width: 760px), (max-aspect-ratio: 1/1) {
+  .dots {
+    display: none;
+  }
+  .launch__sticky {
+    padding: 96px 16px 40px;
+  }
+  /* the HUD becomes a card at the bottom (one column; the cluster row holds the gauge + times) */
+  .launch__hud {
+    margin-block: auto 0; /* pushed to the bottom; if too tall it overflows downwards, not off the top */
+    width: 100%;
+    padding: 20px;
+    border-radius: 20px;
+    border: 1px solid var(--line);
+    background: linear-gradient(160deg, rgba(20, 20, 27, 0.86), rgba(9, 9, 13, 0.82));
+    gap: 14px;
+  }
+  .launch__hud::before {
+    display: none; /* the card has its own background */
+  }
+  .launch__title {
+    font-size: 34px;
+  }
+  .gauge {
+    width: clamp(118px, 32vw, 180px);
+  }
+  .gauge__speed {
+    font-size: 40px;
+  }
+  .launch__meta b {
+    font-size: 30px;
+  }
+  .launch__badge {
+    font-size: 11px;
+    padding: 5px 10px;
+  }
+  .bg-word span {
+    font-size: 40vw;
+  }
+}
+
+/* Portrait tablets: the card is wide enough for the full 180px gauge, so keep the desktop proportions */
+@media (min-width: 561px) and (max-aspect-ratio: 1/1) {
+  .launch__title {
+    font-size: 48px;
+  }
+  .gauge__speed {
+    font-size: 56px;
+  }
+}
+
+/* Landscape phones: very little height, so a compact HUD pinned to the bottom */
+@media (orientation: landscape) and (max-height: 520px) {
+  .launch__sticky {
+    padding: 60px var(--gutter) 12px;
+  }
+  .launch__title {
+    font-size: 28px;
+  }
+  .gauge {
+    width: min(118px, 30vh);
+  }
+  .launch__hint {
+    display: none;
+  }
+  .launch__hud {
+    margin-block: auto 0; /* pinned to the bottom, overflow goes down */
+    gap: 10px;
+  }
+}
+
+.reduce-motion .loader {
+  transition: none;
+}
+
+/* Motion toast + footer toggle */
+.motion-toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  z-index: 80;
+  display: grid;
+  gap: 12px;
+  width: min(440px, calc(100% - 32px));
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #121218;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+  transform: translateX(-50%);
+  font-size: 14px;
+}
+.motion-toast[hidden] {
+  display: none;
+}
+.motion-toast p {
+  margin: 0;
+  color: var(--muted);
+}
+.motion-toast__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.link-btn {
+  /* 44px tall tap target; the negative margin keeps the visual size of a text link */
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 6px;
+  margin: -12px -6px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+/* ==========================================================
+   ACCESSIBILITY EXTRAS
+   ========================================================== */
+/* Touch screens: every control is at least 44px to tap */
+@media (pointer: coarse) {
+  .btn--small {
+    min-height: 44px;
+  }
+  .dots {
+    gap: 0;
+  }
+  .dots a {
+    width: 44px;
+    height: 44px;
+  }
+  /* header links show on wide touch screens (iPads, landscape phones); flex items, so padding sets the tap height */
+  .nav__links a {
+    padding-block: 12px; /* 21px text → 45px tap target */
+  }
+  .nav__logo {
+    padding-block: 8px; /* 29px → 45px */
+  }
+}
+
+/* Windows contrast themes replace colors: keep the paint swatches and make the dots visible */
+@media (forced-colors: active) {
+  .swatch {
+    forced-color-adjust: none;
+  }
+  .dots a::before {
+    forced-color-adjust: none;
+    background: CanvasText;
+    opacity: 1;
+  }
+  .dots a[aria-current='true']::before {
+    background: Highlight;
   }
 }
