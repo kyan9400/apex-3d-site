@@ -319,6 +319,20 @@ button {
   border-color: var(--line);
   box-shadow: none;
 }
+/* <button> elements don't inherit the page font by default */
+button.btn {
+  font-family: inherit;
+  cursor: pointer;
+}
+.btn--replay {
+  gap: 10px;
+}
+.btn--replay svg {
+  transition: rotate 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.btn--replay:hover svg {
+  rotate: -200deg;
+}
 /* real hover only: on phones :hover sticks after a tap (a lifted button, a swollen swatch) */
 @media (hover: hover) {
   .btn:hover {

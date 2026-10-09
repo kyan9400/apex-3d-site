@@ -162,6 +162,19 @@ Add `?fps` to the URL to see the frame rate, pixel ratio and whether it's drawin
 
 ---
 
+## Version 2.2: glossy floor + replay
+
+- **Glossy floor** (`src/floor.js`, high tier only): three's `Reflector` renders the scene a second time
+  from a camera mirrored under the floor, into a texture at half the screen size. A small shader blurs it
+  (5 samples), fades it out away from the car and *adds* it to the dark floor, so it reads as polished
+  concrete. It's a second render pass, so only strong GPUs get it (`reflection` in `quality.js`).
+  Try it on any machine with `?quality=high`. Change `strength` and `radius` in `floor.js` to tune it.
+- **Replay the drive** (button at the end, `onReplay` + `ignition()` in `main.js`): Lenis glides back to the
+  top in 2.6 s (the camera rewinds through every shot because it's tied to the scroll), then the engine
+  turns off (lights out, hero text hidden) and the same `ignition()` timeline as the first load plays again.
+
+---
+
 ## Make it your own
 
 **Change the text/colors:** edit `index.html` (copy) and the `--accent` / fonts in `src/style.css`.

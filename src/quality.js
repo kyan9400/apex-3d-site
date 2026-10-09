@@ -11,9 +11,10 @@ const params = new URLSearchParams(window.location.search);
 
 const TIERS = {
   // dprCap: max pixel ratio · antialias: MSAA edges · streaks: speed lines in the launch scene
-  high: { dprCap: 2, antialias: true, streaks: 120, grain: true },
-  medium: { dprCap: 1.5, antialias: true, streaks: 70, grain: false },
-  low: { dprCap: 1, antialias: false, streaks: 30, grain: false },
+  // reflection: the glossy floor (a second render pass, so strong GPUs only)
+  high: { dprCap: 2, antialias: true, streaks: 120, grain: true, reflection: true },
+  medium: { dprCap: 1.5, antialias: true, streaks: 70, grain: false, reflection: false },
+  low: { dprCap: 1, antialias: false, streaks: 30, grain: false, reflection: false },
 };
 
 // Hardware hints the browser gives us. They are rough, so the frame-time

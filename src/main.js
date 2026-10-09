@@ -25,6 +25,7 @@ import { quality, probeGPU, createAdaptiveResolution, createFpsMeter } from './q
 import { createEffects, createWheelBlur } from './effects.js';
 import { splitHeadings, progressUI, backgroundWord, cursorAndMagnets, filmGrain, heroMotion } from './ui.js';
 import { reducedMotion as prefersReducedMotion, motionControls } from './motion.js';
+import { createGlossyFloor } from './floor.js';
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -117,6 +118,24 @@ swatches.forEach((btn) =>
     onPaint?.(btn.dataset.color);
   })
 );
+
+// REPLAY THE DRIVE: glide back to the top (the camera rewinds through every shot on the way),
+// then init() turns the engine off and on again. Without WebGL it just scrolls up.
+let onReplay = null;
+const easeInOutCubic = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+document.getElementById('replay').addEventListener('click', () => {
+  const arrived = () => {
+    const title = document.querySelector('.hero__title');
+    title.setAttribute('tabindex', '-1'); // keyboard users continue from the top too
+    title.focus({ preventScroll: true });
+    onReplay?.();
+  };
+  if (lenis) lenis.scrollTo(0, { duration: 2.6, easing: easeInOutCubic, lock: true, force: true, onComplete: arrived });
+  else {
+    window.scrollTo(0, 0);
+    arrived();
+  }
+});
 
 // Skip link: Lenis scrolls there; this moves keyboard focus too (to <main>, so the hero's h1 is read first)
 document.querySelector('.skip-link').addEventListener('click', () => {
@@ -276,6 +295,9 @@ function init() {
   const ground = new THREE.Mesh(new THREE.CircleGeometry(9, 64), groundMat);
   ground.rotation.x = -Math.PI / 2;
   scene.add(ground);
+
+  // Glossy floor: a soft real reflection of the car on top of the dark disc (floor.js, high tier only)
+  const floor = quality.settings.reflection ? createGlossyFloor(scene) : null;
 
   /* ------------------------------------------------------------------------
      MATERIALS: the paint is a MeshPhysicalMaterial with a clearcoat layer,
@@ -722,6 +744,7 @@ function init() {
     for (let i = 0; i < state.length && !changed; i++) changed = Math.abs(state[i] - lastState[i]) > 1e-5;
 
     if (changed) {
+      floor?.fit(view.w * resolution.dpr, view.h * resolution.dpr); // reflection texture = half the drawing size
       renderer.render(scene, camera);
       lastState.set(state);
       needsRender = false;
@@ -786,18 +809,34 @@ function init() {
       lenis?.start();
       ScrollTrigger.refresh();
       if (prefersReducedMotion) return;
-      gsap
-        .timeline({ delay: 0.35 })
-        .to(intro, { dist: 1, theta: 0, duration: 2.8, ease: 'power3.out' }, 0)
-        .to(look, { lights: 1, duration: 0.07, repeat: 4, yoyo: true, ease: 'none' }, 0.25) // ignition flicker
-        .to(look, { lights: 0.9, duration: 0.4 }, 0.65)
-        .to(look, { exposure: 0.9, duration: 1.9, ease: 'power2.inOut' }, 0.5)
-        .to(look, { envSpin: 0, duration: 3, ease: 'power3.out' }, 0.2) // light sweep across the body
-        // the hero text and the interface power on with the headlights (heroMotion in ui.js);
-        // with the 0.35 s delay this starts as the lifting curtain uncovers the title
-        .add(() => hero.play(), 0.45);
+      ignition(0.35); // with this delay the intro starts as the lifting curtain uncovers the title
     }, 450);
   }
+
+  // The engine start: camera swings in, headlights flicker on, studio lights sweep over the paint,
+  // and the hero text + interface power on with the headlights (heroMotion in ui.js)
+  function ignition(delay) {
+    return gsap
+      .timeline({ delay })
+      .to(intro, { dist: 1, theta: 0, duration: 2.8, ease: 'power3.out' }, 0)
+      .to(look, { lights: 1, duration: 0.07, repeat: 4, yoyo: true, ease: 'none' }, 0.25) // ignition flicker
+      .to(look, { lights: 0.9, duration: 0.4 }, 0.65)
+      .to(look, { exposure: 0.9, duration: 1.9, ease: 'power2.inOut' }, 0.5)
+      .to(look, { envSpin: 0, duration: 3, ease: 'power3.out' }, 0.2) // light sweep across the body
+      .add(() => hero.restart(), 0.45);
+  }
+
+  // Replay (button at the end of the page): engine off — lights out, text gone — then ignition again
+  onReplay = () => {
+    if (prefersReducedMotion) return; // calm mode: arriving at the top is enough
+    gsap
+      .timeline()
+      .to(look, { lights: 0, exposure: 0.1, duration: 0.35, ease: 'power2.in', overwrite: 'auto' })
+      .add(() => hero.pause(0), 0.1) // back to the intro's hidden starting point
+      .set(intro, { dist: 1.5, theta: -40 }) // move the camera out while it is dark
+      .set(look, { envSpin: -1.8 })
+      .add(() => ignition(0.25));
+  };
 }
 
 /* ==========================================================================
