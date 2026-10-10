@@ -2,6 +2,8 @@
 // the artifact host adds its own <html>/<head>/<body>, so we strip ours, put <title> first
 // and inline the CSS. Run after `npm run build` (or use `npm run build:artifact`, which does both;
 // `vite build` empties dist/, so this script must run again after every build).
+// Every dist/assets/*.js chunk must be published with the page: the car variants
+// (variant-c/d/e/f) are separate chunks the browser loads on demand when a model is picked.
 // index.html must keep a bare <body> and the fonts <link> with href as its first attribute.
 import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
 
@@ -28,3 +30,7 @@ ${body.trim()}
 writeFileSync(new URL('apex-motors.html', dist), page);
 
 console.log(`dist/apex-motors.html  (script: assets/${jsFile})`);
+
+// The lazy chunks (body-style variants) 404 unless they are uploaded too
+const chunks = readdirSync(new URL('assets/', dist)).filter((f) => f.endsWith('.js'));
+console.log(`publish these files alongside: ${chunks.map((f) => `assets/${f}`).join(', ')}`);

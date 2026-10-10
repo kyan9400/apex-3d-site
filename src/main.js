@@ -93,13 +93,18 @@ const hero = heroMotion(prefersReducedMotion); // hidden states now, played afte
 let onModel = null;
 const modelButtons = document.querySelectorAll('.model-btn');
 const modelNote = document.getElementById('model-note');
+const modelGroup = document.querySelector('.models');
 let switching = false;
 modelButtons.forEach((btn) =>
   btn.addEventListener('click', async () => {
     if (switching || !onModel || btn.getAttribute('aria-pressed') === 'true') return;
     const entry = MODELS.find((m) => m.id === btn.dataset.model);
     switching = true;
+    // the whole group is busy: every button announces it can't be used until the swap ends
     btn.setAttribute('aria-busy', 'true');
+    modelGroup?.setAttribute('aria-busy', 'true');
+    modelButtons.forEach((b) => b.setAttribute('aria-disabled', 'true'));
+    modelNote.textContent = `Loading ${entry.name}…`; // the polite live region announces the wait
     try {
       await onModel(entry);
       modelButtons.forEach((b) => b.setAttribute('aria-pressed', String(b === btn)));
@@ -109,6 +114,8 @@ modelButtons.forEach((btn) =>
       modelNote.textContent = 'That model could not load. Please try again.';
     } finally {
       btn.removeAttribute('aria-busy');
+      modelGroup?.removeAttribute('aria-busy');
+      modelButtons.forEach((b) => b.removeAttribute('aria-disabled'));
       switching = false;
     }
   })
@@ -352,8 +359,8 @@ function init() {
     const replacing = !!model; // false for the first car, which is drawn when the render loop starts
     if (replacing) {
       car.remove(model);
+      wheelBlur?.dispose(); // the blur discs' shared geometry/material/texture (disposeCar skips them)
       disposeCar(model);
-      wheelBlur?.dispose();
     }
     model = next;
     wheels.length = 0;
@@ -383,7 +390,7 @@ function init() {
   function disposeCar(old) {
     const shared = new Set([paint, chrome, glass]);
     old.traverse((o) => {
-      if (!o.isMesh) return;
+      if (!o.isMesh || o.name === 'rim_blur') return; // wheelBlur.dispose() frees those
       o.geometry.dispose();
       for (const m of [].concat(o.material)) {
         if (shared.has(m)) continue;

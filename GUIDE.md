@@ -69,7 +69,7 @@ apex-3d-site/
 ### Accessibility & performance that's already handled
 - `prefers-reduced-motion`: no smooth scroll, no intro, no reveals, no idle wheel spin, and the camera
   cuts between shots instead of orbiting with the scrollbar.
-- Pixel ratio capped at 2; one model (1.7 MB); baked shadow instead of real-time shadows.
+- Pixel ratio capped at 2; five procedural body styles (the first ships in the main bundle, the other four download only when picked); baked shadow instead of real-time shadows.
 - WebGL check with a fallback message; page still works if the model can't load or the 3D view fails to start.
 - Color buttons are real `<button>`s with labels and `aria-pressed` (they work even without WebGL).
 - Split headings: screen readers (and page translation) read a plain copy of each heading in an
@@ -177,6 +177,49 @@ Add `?fps` to the URL to see the frame rate, pixel ratio and whether it's drawin
 
 ---
 
+## Version 3: the Apex GT and the model lineup
+
+### The car is built in code
+There is no `.glb` file. Every car is made of Three.js shapes in `src/car/`, and each one follows
+`src/car/CONTRACT.md`: the names the page looks for (`main`, `wheel_fl`…`wheel_rr`, `rim_*`, `brakes`),
+the light positions in `userData`, size and orientation. Open `car-preview.html` (via the dev server)
+to look at one car on its own while you work on it.
+
+### The 5 models
+| Button | Model | File |
+|---|---|---|
+| Speedster | GT Speedster | `variant-a.js` (in the main bundle) |
+| Coupé | GT Coupé | `variant-c.js` |
+| Endurance | R Endurance | `variant-d.js` |
+| Electric | E Electric | `variant-e.js` |
+| Tourer | Grand Tourer | `variant-f.js` |
+
+### How they load
+`src/car/car.js` exports `MODELS`: an `id`, a `name`, a `note` and a `load()` function per car.
+The Speedster is imported normally, so the page opens with it. The other four use `import()`,
+so Vite puts each in its own chunk and the browser downloads it only when a visitor picks it.
+(Publishing somewhere by hand? Upload every `dist/assets/*.js` file, or those picks 404.
+`scripts/artifact-page.mjs` prints the list.)
+
+### Swapping cars (`src/main.js`)
+- `installCar(next)` puts a car on stage: finds the wheels, gives the tail lights their own brake
+  material, builds the suspension group, adds the wheel blur discs and moves the light glows
+  (`fx.setLights`) to the new car.
+- `disposeCar(old)` frees the old car's geometry and its own materials. The shared paint, chrome and
+  glass stay, because the next car uses them (that is why the color picker survives a swap).
+- `onModel` runs the sequence: lights off (GSAP), swap, lights on. While it runs, the whole button
+  group is busy and the note says "Loading…". If a chunk fails, the note says so and the old car stays.
+
+### Add a sixth model
+1. Copy a variant to `src/car/variant-g.js` and change the shapes. Keep everything `CONTRACT.md` asks for.
+2. Add a line to `MODELS` in `car.js`:
+   `{ id: 'roadster', name: 'GT Roadster', note: '…', load: async () => (await import('./variant-g.js')).createCar }`
+3. Add a button in the `.models` group in `index.html` with the same id:
+   `<button class="model-btn" type="button" data-model="roadster" aria-pressed="false">Roadster</button>`
+4. `npm run build`, then pick it on the page.
+
+---
+
 ## Make it your own
 
 **Change the text/colors:** edit `index.html` (copy) and the `--accent` / fonts in `src/style.css`.
@@ -186,8 +229,9 @@ The color swatches are the `data-color` buttons in the `#colors` section.
 running, open devtools and play with `__debug.shot.theta = 200` to find angles you like.
 
 **Change the car:** open `/car-preview.html?variant=a` while `npm run dev` runs to look at it from every
-camera angle. Each design is a file in `src/car/` that follows `CONTRACT.md`; `src/car/car.js` picks which one
-the site uses. To use a downloaded model instead, load it with `GLTFLoader` and give its parts the names
+camera angle. Each design is a file in `src/car/` that follows `CONTRACT.md`; `src/car/car.js` lists the lineup
+in `MODELS` (the first entry, exported as `createCar`, is the car the page opens with); see 'Version 3' above
+to add or reorder models. To use a downloaded model instead, load it with `GLTFLoader` and give its parts the names
 from `CONTRACT.md` (check the model's license first — see below).
 
 **Not a car?** Same code works for a phone, sneaker, watch or bottle: swap the model and the copy.
