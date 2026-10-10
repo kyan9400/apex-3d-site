@@ -21,7 +21,7 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import Lenis from 'lenis';
 import { quality, probeGPU, createAdaptiveResolution, createFpsMeter } from './quality.js';
 import { createEffects, createWheelBlur, createContactShadow } from './effects.js';
-import { createCar } from './car/car.js';
+import { createCar, MODELS } from './car/car.js';
 import { splitHeadings, progressUI, backgroundWord, cursorAndMagnets, filmGrain, heroMotion } from './ui.js';
 import { reducedMotion as prefersReducedMotion, motionControls } from './motion.js';
 import { createGlossyFloor } from './floor.js';
@@ -88,6 +88,31 @@ progressUI();
 backgroundWord(prefersReducedMotion);
 cursorAndMagnets(prefersReducedMotion);
 const hero = heroMotion(prefersReducedMotion); // hidden states now, played after loading
+
+// Body-style buttons: init() plugs the actual car swap into onModel (returns a promise)
+let onModel = null;
+const modelButtons = document.querySelectorAll('.model-btn');
+const modelNote = document.getElementById('model-note');
+let switching = false;
+modelButtons.forEach((btn) =>
+  btn.addEventListener('click', async () => {
+    if (switching || !onModel || btn.getAttribute('aria-pressed') === 'true') return;
+    const entry = MODELS.find((m) => m.id === btn.dataset.model);
+    switching = true;
+    btn.setAttribute('aria-busy', 'true');
+    try {
+      await onModel(entry);
+      modelButtons.forEach((b) => b.setAttribute('aria-pressed', String(b === btn)));
+      modelNote.textContent = `${entry.name} · ${entry.note}`;
+    } catch (err) {
+      console.error('Model switch failed:', err);
+      modelNote.textContent = 'That model could not load. Please try again.';
+    } finally {
+      btn.removeAttribute('aria-busy');
+      switching = false;
+    }
+  })
+);
 
 // Color picker UI works even without WebGL; init() plugs the 3D paint tween into onPaint
 let onPaint = null;
@@ -319,31 +344,65 @@ function init() {
      lights, brakes and wheel_fl / wheel_fr / wheel_rl / wheel_rr.
      ------------------------------------------------------------------------ */
   setLoadProgress(40);
-  const model = createCar({ paint, chrome, glass, tier: quality.tier });
-  ['wheel_fl', 'wheel_fr', 'wheel_rl', 'wheel_rr'].forEach((n) => wheels.push(model.getObjectByName(n)));
+  let model = null; // the car currently on screen
+  let fx = null; // the effects (created below, once the first car's light positions are known)
 
-  // Brake lights: the tail-light lenses get their own material so only they glow when braking
-  const tailGlass = model.getObjectByName('brakes');
-  tailMat = tailGlass.material = tailGlass.material.clone();
-  tailMat.emissive.set(0xff1010);
+  // Puts a car (from createCar) on stage and wires it up. Also used by the model switcher.
+  function installCar(next) {
+    const replacing = !!model; // false for the first car, which is drawn when the render loop starts
+    if (replacing) {
+      car.remove(model);
+      disposeCar(model);
+      wheelBlur?.dispose();
+    }
+    model = next;
+    wheels.length = 0;
+    ['wheel_fl', 'wheel_fr', 'wheel_rl', 'wheel_rr'].forEach((n) => wheels.push(model.getObjectByName(n)));
 
-  // Suspension: the body (not the wheels) sits in a group that tilts around the axle height
-  chassis = new THREE.Group();
-  chassis.position.y = model.getObjectByName('wheel_fl').position.y;
-  model.add(chassis);
-  chassis.attach(model.getObjectByName('main')); // attach() keeps the world position
+    // Brake lights: the tail-light lenses get their own material so only they glow when braking
+    const tailGlass = model.getObjectByName('brakes');
+    tailMat = tailGlass.material = tailGlass.material.clone();
+    tailMat.emissive.set(0xff1010);
 
-  // Wheel motion blur discs (not on the low tier: there the spin is only capped)
-  if (quality.tier !== 'low') wheelBlur = createWheelBlur(model);
+    // Suspension: the body (not the wheels) sits in a group that tilts around the axle height
+    chassis = new THREE.Group();
+    chassis.position.y = model.getObjectByName('wheel_fl').position.y;
+    model.add(chassis);
+    chassis.attach(model.getObjectByName('main')); // attach() keeps the world position
 
-  // Soft contact shadow under the car, drawn on a canvas (cheaper than real-time shadows)
+    // Wheel motion blur discs (not on the low tier: there the spin is only capped)
+    wheelBlur = quality.tier !== 'low' ? createWheelBlur(model) : null;
+
+    car.add(model);
+    fx?.setLights(model.userData.headlights, model.userData.taillights); // glows follow the new lights
+    if (replacing) needsRender = true;
+  }
+
+  // Frees a removed car's GPU memory (its geometry and its own materials; the shared
+  // paint / chrome / glass stay because the next car uses them too)
+  function disposeCar(old) {
+    const shared = new Set([paint, chrome, glass]);
+    old.traverse((o) => {
+      if (!o.isMesh) return;
+      o.geometry.dispose();
+      for (const m of [].concat(o.material)) {
+        if (shared.has(m)) continue;
+        Object.values(m).forEach((v) => v?.isTexture && v.dispose());
+        m.dispose();
+      }
+    });
+  }
+
+  installCar(createCar({ paint, chrome, glass, tier: quality.tier }));
+
+  // Soft contact shadow under the car, drawn on a canvas (cheaper than real-time shadows).
+  // It belongs to the stage, not to a car, so it stays when the model changes.
   const contactShadow = createContactShadow();
-  model.add(contactShadow);
-  car.add(model);
+  car.add(contactShadow);
 
   // Light glows, headlight beams, brake glow, road and speed streaks (see effects.js),
   // placed on this car's head and tail lights
-  const fx = createEffects(scene, {
+  fx = createEffects(scene, {
     streakCount: quality.settings.streaks,
     reducedMotion: prefersReducedMotion,
     brakeSpill: quality.tier !== 'low', // the red floor glow behind the car
@@ -675,6 +734,23 @@ function init() {
      7. COLOR PICKER: tween the paint color in 3D (the buttons and the CSS
      accent are wired at the top of this file, so they work without WebGL)
      ------------------------------------------------------------------------ */
+  // Body-style switcher: build the chosen car (its file downloads the first time), compile its
+  // shaders while the old car is still showing, then "lights off → swap → lights on"
+  onModel = async (entry) => {
+    const make = await entry.load();
+    const next = make({ paint, chrome, glass, tier: quality.tier });
+    await renderer.compileAsync(next, camera, scene).catch(() => {}); // no shader hitch at the swap
+    if (prefersReducedMotion) return installCar(next);
+    await new Promise((resolve) =>
+      gsap
+        .timeline({ onComplete: resolve })
+        .to(look, { exposure: 0.12, lights: 0, duration: 0.35, ease: 'power2.in', overwrite: 'auto' })
+        .add(() => installCar(next))
+        .to(look, { lights: 1, duration: 0.07, repeat: 3, yoyo: true, ease: 'none' }, '+=0.12') // headlight flicker
+        .to(look, { lights: 0.9, exposure: 0.9, duration: 0.6, ease: 'power2.out' })
+    );
+  };
+
   onPaint = (hex) => {
     const color = new THREE.Color(hex);
     gsap.to(paint.color, { r: color.r, g: color.g, b: color.b, duration: prefersReducedMotion ? 0 : 0.8, ease: 'power2.out' });
@@ -792,6 +868,7 @@ function setAccent(hex) {
 }
 
 function showFatal(message) {
+  document.documentElement.classList.add('no-webgl'); // hides the body-style switcher
   loaderEl.classList.add('is-error'); // no "0%" next to the error message
   loaderText.textContent = message;
   setTimeout(() => {

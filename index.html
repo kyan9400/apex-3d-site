@@ -155,8 +155,21 @@
         <div class="drag-zone" data-cursor="Drag" aria-hidden="true"></div>
         <div class="panel">
           <p class="eyebrow" data-reveal>04 — Make it yours</p>
-          <h2 data-split>Pick your<br />color.</h2>
-          <div class="swatches" role="group" aria-label="Paint color" data-reveal>
+          <h2 data-split>Build<br />yours.</h2>
+          <!-- Body style: main.js swaps the 3D car (src/car/car.js lists the models) -->
+          <div class="config" id="model-config" data-reveal>
+            <p class="config__label" id="model-label">Body style</p>
+            <div class="models" role="group" aria-labelledby="model-label">
+              <button class="model-btn" type="button" data-model="speedster" aria-pressed="true">Speedster</button>
+              <button class="model-btn" type="button" data-model="coupe" aria-pressed="false">Coupé</button>
+              <button class="model-btn" type="button" data-model="endurance" aria-pressed="false">Endurance</button>
+              <button class="model-btn" type="button" data-model="electric" aria-pressed="false">Electric</button>
+              <button class="model-btn" type="button" data-model="tourer" aria-pressed="false">Tourer</button>
+            </div>
+            <p class="model-note" id="model-note" aria-live="polite">GT Speedster · Open top, twin humps, tan cockpit</p>
+          </div>
+          <p class="config__label" id="paint-label" data-reveal>Paint</p>
+          <div class="swatches" role="group" aria-labelledby="paint-label" data-reveal>
             <!-- data-color is read by main.js and applied to the car's paint -->
             <button class="swatch" data-color="#b3121f" data-name="Rosso Apex" aria-pressed="true" aria-label="Rosso Apex" style="--c:#b3121f"></button>
             <button class="swatch" data-color="#1c2f5a" data-name="Midnight Blue" aria-pressed="false" aria-label="Midnight Blue" style="--c:#1c2f5a"></button>

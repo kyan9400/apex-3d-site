@@ -201,6 +201,13 @@ export function createEffects(
   return {
     // Every canvas texture, so main.js can upload them to the GPU behind the loader
     textures: [glowTex, beamTex, roadTex, roadFade],
+    // Move the glows, beams and brake glow onto another car's lights (model switcher)
+    setLights(newHeadlights, newTaillights) {
+      newHeadlights.forEach((p, i) => heads[i]?.position.set(...p));
+      newTaillights.forEach((p, i) => tails[i]?.position.set(...p));
+      newHeadlights.forEach(([x, , z], i) => beams[i]?.position.set(x * 1.3, 0.004, z - 3.5));
+      spill?.position.set(0, 0.005, newTaillights[0][2] + 0.45);
+    },
     /**
      * @param dt       seconds since last frame
      * @param camera   the camera (to hide light glows seen from behind)
@@ -307,6 +314,12 @@ export function createWheelBlur(model) {
   let shown = -1; // the last amount applied (set() is called every frame)
   return {
     texture,
+    // free the GPU memory when this car is swapped out (model switcher)
+    dispose() {
+      material.dispose();
+      texture.dispose();
+      geometry.dispose();
+    },
     // 0 = sharp spokes, 1 = full blur
     set(amount) {
       if (amount === shown) return; // nothing changed: no work, no garbage

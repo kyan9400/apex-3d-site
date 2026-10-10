@@ -520,6 +520,54 @@ h2 {
   text-align: right;
 }
 
+/* BODY STYLE (model switcher) */
+.config {
+  margin-bottom: 18px;
+}
+.config__label {
+  margin: 0 0 10px !important;
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.models {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.model-btn {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  font: 500 13px/1 var(--font-body);
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
+}
+.model-btn:hover {
+  border-color: var(--text);
+}
+.model-btn[aria-pressed='true'] {
+  background: var(--accent);
+  border-color: transparent;
+  color: var(--accent-ink, #fff);
+}
+.model-btn[aria-busy='true'] {
+  opacity: 0.6;
+  cursor: progress;
+}
+.model-note {
+  margin: 12px 0 0 !important;
+  font-size: 13px;
+}
+.no-webgl .config {
+  display: none; /* nothing to switch without the 3D view */
+}
+
 /* COLOR SWATCHES */
 .swatches {
   display: flex;
