@@ -8,10 +8,19 @@
     <meta name="description" content="Apex GT. Built around control, performance and the feeling of freedom." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Fonts load without blocking the first paint (display=swap shows system text until they arrive) -->
     <link
+      rel="preload"
+      as="style"
       href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Syne:wght@600;700;800&display=swap"
-      rel="stylesheet"
+      onload="this.onload = null; this.rel = 'stylesheet'"
     />
+    <noscript>
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Syne:wght@600;700;800&display=swap"
+      />
+    </noscript>
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
@@ -36,6 +45,7 @@
 
     <!-- The WebGL canvas sits fixed behind all the content -->
     <canvas class="webgl" id="webgl" aria-hidden="true"></canvas>
+    <div class="poster" aria-hidden="true"></div>
 
     <!-- Scroll progress and the custom cursor (the section dots come after the header, for Tab order) -->
     <div class="progress" aria-hidden="true"><span></span></div>

@@ -34,6 +34,8 @@ function guessTier() {
 export const quality = {
   tier: guessTier(),
   gpu: '', // GPU name, shown by the ?fps meter
+  software: false, // true when WebGL runs on the CPU (no GPU); set by refineTierFromGPU
+  forced: params.get('quality') in TIERS, // ?quality=low|medium|high always gets the 3D
   get settings() {
     return TIERS[this.tier];
   },
@@ -52,8 +54,10 @@ function gpuName(gl) {
 // and integrated laptop / phone graphics.
 export function refineTierFromGPU(gl) {
   quality.gpu = gpuName(gl);
+  // no real GPU: the CPU would draw every frame, so main.js shows the still poster instead
+  quality.software = /swiftshader|llvmpipe|softpipe|software|basic render|mesa offscreen/i.test(quality.gpu);
   if (params.get('quality') in TIERS) return;
-  if (/swiftshader|llvmpipe|software|basic render/i.test(quality.gpu)) quality.tier = 'low';
+  if (quality.software) quality.tier = 'low';
   else if (/intel|uhd|iris|mali|adreno|powervr|radeon\(tm\) graphics/i.test(quality.gpu) && quality.tier === 'high')
     quality.tier = 'medium';
 }

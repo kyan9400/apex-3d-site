@@ -228,17 +228,30 @@ ScrollTrigger.create({
    -------------------------------------------------------------------------- */
 // probeGPU() checks for WebGL 2 and reads the GPU name, so the quality tier is final
 // before the renderer is created
-if (!probeGPU()) {
-  showFatal('Your browser does not support WebGL 2, so the 3D car is hidden. The rest of the page still works.');
-} else {
-  try {
-    init();
-  } catch (err) {
-    // e.g. the GPU is blocklisted or too many WebGL pages are open
-    console.error(err);
-    showFatal('The 3D view could not start on this device. The rest of the page still works.');
+function startScene() {
+  if (!probeGPU()) {
+    showFatal('Your browser does not support WebGL 2, so the 3D car is hidden. The rest of the page still works.');
+  } else if (quality.software && !quality.forced) {
+    showPoster(); // no GPU: a still of the car instead of a slideshow drawn by the CPU
+  } else {
+    try {
+      init();
+    } catch (err) {
+      // e.g. the GPU is blocklisted or too many WebGL pages are open
+      console.error(err);
+      showFatal('The 3D view could not start on this device. The rest of the page still works.');
+    }
   }
 }
+// Building the car is heavy, synchronous work. Running it straight away kept the browser from
+// painting anything, even the loader, for seconds on phones. Let the loader paint first, then build
+// once the page has loaded and the browser is idle (the loader covers the wait).
+function afterLoadIdle(fn) {
+  const idle = () => ('requestIdleCallback' in window ? requestIdleCallback(fn, { timeout: 1500 }) : setTimeout(fn, 200));
+  if (document.readyState === 'complete') idle();
+  else window.addEventListener('load', idle, { once: true });
+}
+afterLoadIdle(startScene);
 
 function init() {
   const renderer = new THREE.WebGLRenderer({
@@ -872,6 +885,17 @@ function setAccent(hex) {
   root.setProperty('--accent', hex);
   root.setProperty('--accent-hi', lum < 0.06 ? mixWithWhite(hex, 0.5) : hex);
   root.setProperty('--accent-ink', lum > 0.19 ? '#111' : '#fff'); // 0.19 = where white and #111 give equal contrast
+}
+
+// No GPU: show the still poster (style.css .poster) and open the page straight away
+function showPoster() {
+  document.documentElement.classList.add('no-webgl'); // hides the body-style switcher, shows the poster
+  loaderEl.classList.add('is-done');
+  document.body.classList.remove('is-loading');
+  setBehindLoaderInert(false);
+  lenis?.start();
+  ScrollTrigger.refresh();
+  hero.play();
 }
 
 function showFatal(message) {

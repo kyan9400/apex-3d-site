@@ -242,6 +242,28 @@ button {
   display: block;
   outline: none;
 }
+/* No GPU (see showPoster in main.js): a still of the car in the canvas's place. A background image
+   is only downloaded when the rule applies, so visitors with a GPU never fetch it. */
+.poster {
+  display: none;
+  position: fixed;
+  inset: 0;
+  height: 100lvh;
+  z-index: 0;
+  background: url('/poster-desktop.webp') center / cover no-repeat;
+  pointer-events: none;
+}
+@media (max-aspect-ratio: 4/5) {
+  .poster {
+    background-image: url('/poster-mobile.webp');
+  }
+}
+.no-webgl .poster {
+  display: block;
+}
+.no-webgl .webgl {
+  display: none;
+}
 
 /* ==========================================================
    NAV
