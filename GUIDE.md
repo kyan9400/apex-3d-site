@@ -5,7 +5,7 @@ Under the hood every one of them is the same **4 ingredients**:
 
 | # | Ingredient | What it does | In this project |
 |---|---|---|---|
-| 1 | **3D model** | The object (car, phone, shoe…) as a `.glb` file | `public/models/ferrari.glb`, shipped with the site (with fallbacks) |
+| 1 | **3D model** | The object (car, phone, shoe…), usually a `.glb` file | The Apex GT, **built entirely in code** in `src/car/` (nothing to download, 100% owned) |
 | 2 | **Real-time 3D renderer** | Draws the model in the browser with lighting and reflections | Three.js |
 | 3 | **Scroll animation** | Moves the camera/model as you scroll | GSAP ScrollTrigger + Lenis |
 | 4 | **Cinematic design** | Dark background, huge type, glass cards, lots of space | `src/style.css` |
@@ -26,9 +26,10 @@ apex-3d-site/
 ├─ src/effects.js          light glows, headlight beams, road + speed streaks, brake glow, wheel blur
 ├─ src/ui.js               hero intro, split-text headings, progress bar, dots, cursor, film grain
 ├─ src/motion.js           the reduced-motion choice (OS setting + "Turn on full motion")
+├─ src/floor.js            the glossy floor reflection (high tier)
+├─ src/car/                the procedural car: car.js picks the design, CONTRACT.md lists the rules
 ├─ src/style.css           the look
-├─ public/models/          ferrari.glb + ferrari_ao.png (the baked shadow)
-├─ public/draco/           decoder for compressed 3D models (copied from three)
+├─ car-preview.html        dev-only page to look at the car from the site's camera angles
 └─ scripts/artifact-page.mjs   turns the build into a single page for a Claude artifact
 ```
 
@@ -45,10 +46,11 @@ apex-3d-site/
    which makes the car look like it's under a spotlight.
 5. **Materials.** The paint is `MeshPhysicalMaterial` with `clearcoat: 1`. That clear lacquer layer
    is *the* trick that makes car paint look real.
-6. **Loading the model.** `GLTFLoader` + `DRACOLoader`. Parts are found by name
-   (`getObjectByName('body')`) and given new materials. A baked shadow image sits under the car.
-   The progress callback drives the loader's progress line and counter (`setLoadProgress`). `MODEL_SOURCES` is tried in order until one works:
-   the local `.glb` → the same model as base64 `.json` (for hosts that refuse `.glb`) → two CDNs.
+6. **Building the car.** `createCar()` (from `src/car/`) builds the Apex GT out of code: lofted body
+   surfaces, glass, lights, wheels and rims. It returns the parts by name (`body`, `glass`, `brakes`,
+   `wheel_fl`…), so the rest of the code can find them with `getObjectByName()`. A soft contact shadow
+   is drawn on a canvas (`createContactShadow` in `effects.js`). Nothing is downloaded, so the loader
+   only waits for the shaders to compile ("Warming up the engine").
 7. **Camera "shots" (`SHOTS` array).** One shot per section. Each shot is an *orbit* around the car
    (`theta` = angle around, `phi` = angle from above, `dist` = distance), so moving between shots
    sweeps around the car instead of through it. `shiftX/shiftY` use `camera.setViewOffset` to slide
@@ -183,12 +185,10 @@ The color swatches are the `data-color` buttons in the `#colors` section.
 **Change the camera angles:** edit the `SHOTS` array in `src/main.js`. Tip: with `npm run dev`
 running, open devtools and play with `__debug.shot.theta = 200` to find angles you like.
 
-**Use a different model:**
-1. Get a `.glb` (see below). Shrink it at https://gltf.report (Draco compression, resize textures to 2K).
-2. Put it in `public/models/your-car.glb` and change the first line of `MODEL_SOURCES` in `main.js`.
-3. Open it in https://gltf-viewer.donmccurdy.com to see the part names, and update the
-   `getObjectByName('body')` / wheel names (or remove those lines to keep the model's own materials).
-4. Adjust `SHOTS` distances if your model is a different size.
+**Change the car:** open `/car-preview.html?variant=a` while `npm run dev` runs to look at it from every
+camera angle. Each design is a file in `src/car/` that follows `CONTRACT.md`; `src/car/car.js` picks which one
+the site uses. To use a downloaded model instead, load it with `GLTFLoader` and give its parts the names
+from `CONTRACT.md` (check the model's license first — see below).
 
 **Not a car?** Same code works for a phone, sneaker, watch or bottle: swap the model and the copy.
 
@@ -196,7 +196,8 @@ running, open devtools and play with `__debug.shot.theta = 200` to find angles y
 
 ## Where to get 3D models legally
 
-- **Sketchfab** (sketchfab.com): filter by "Downloadable" + license. CC-BY means free with credit (like the footer here). Check each model's license before client work.
+- **Sketchfab** (sketchfab.com): filter by "Downloadable" + license. CC-BY means free with credit. Check each model's license before client work.
+- **Build it in code** (like the Apex GT here): you own it completely and there's nothing to download.
 - **Poly Haven** (polyhaven.com): CC0 (no credit needed) models, HDRIs and textures.
 - **Fab** (fab.com), **CGTrader**, **TurboSquid**: paid, higher quality, commercial licenses.
 - **Make your own:** Blender (free) → File → Export → glTF 2.0 (.glb).
@@ -231,8 +232,7 @@ Then any of these:
 - **GitHub Pages**: push to GitHub, set `base: '/repo-name/'` in a `vite.config.js`, and deploy `dist/`
 
 **As a Claude artifact:** run `npm run build:artifact`. It builds the site and then runs
-`scripts/artifact-page.mjs`, which writes `dist/apex-motors.html` (one page with the CSS inlined) and
-`dist/models/ferrari.glb.json` (the model as base64 text, because artifacts don't serve `.glb` files).
+`scripts/artifact-page.mjs`, which writes `dist/apex-motors.html` (one page with the CSS inlined).
 `vite build` empties `dist/` every time, so after a plain `npm run build` run the script again
 (`node scripts/artifact-page.mjs`).
 

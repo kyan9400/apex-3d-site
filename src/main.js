@@ -2,7 +2,7 @@
    APEX MOTORS — scroll-driven 3D car showcase
 
    The 4 ingredients of every "premium 3D website":
-     1. A 3D model         -> a .glb file loaded with GLTFLoader (+ Draco compression)
+     1. A 3D model         -> the Apex GT, built entirely in code (src/car/)
      2. A real-time scene  -> Three.js renderer, studio environment lighting, materials
      3. Scroll animation   -> GSAP ScrollTrigger moves the camera as you scroll,
                               Lenis makes the scrolling smooth
@@ -15,35 +15,18 @@
    ========================================================================== */
 
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import Lenis from 'lenis';
 import { quality, probeGPU, createAdaptiveResolution, createFpsMeter } from './quality.js';
-import { createEffects, createWheelBlur } from './effects.js';
+import { createEffects, createWheelBlur, createContactShadow } from './effects.js';
+import { createCar } from './car/car.js';
 import { splitHeadings, progressUI, backgroundWord, cursorAndMagnets, filmGrain, heroMotion } from './ui.js';
 import { reducedMotion as prefersReducedMotion, motionControls } from './motion.js';
 import { createGlossyFloor } from './floor.js';
 
 gsap.registerPlugin(ScrollTrigger);
-
-/* --------------------------------------------------------------------------
-   MODEL SOURCES
-   The car is the free Ferrari 458 model from the three.js examples (CC-BY,
-   credit in the footer). It ships with the site in /public/models and the
-   loader tries each source in order until one works. To use your own car,
-   put a .glb in /public/models and change the first line.
-   -------------------------------------------------------------------------- */
-const MODEL_SOURCES = [
-  `${import.meta.env.BASE_URL}models/ferrari.glb`,
-  // Same model as base64 text, for hosts that refuse .glb files (made by scripts/artifact-page.mjs)
-  `${import.meta.env.BASE_URL}models/ferrari.glb.json`,
-  'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r186/examples/models/gltf/ferrari.glb',
-  'https://threejs.org/examples/models/gltf/ferrari.glb',
-];
-const MODEL_BYTES = 1681572; // used for the progress bar when the server doesn't send a size
 
 /* --------------------------------------------------------------------------
    DOM
@@ -329,154 +312,58 @@ function init() {
   let lastSpeed = 0;
   let wheelBlur = null; // motion-blur discs on the wheels (medium/high tier)
 
-  // Light glows, headlight beams, brake glow, road and speed streaks (see effects.js)
+  /* ------------------------------------------------------------------------
+     3. THE CAR — built entirely in code (src/car/), so there is nothing to
+     download and every part of it belongs to the site owner. createCar()
+     returns the parts by name: main (the body group), body, glass, trim,
+     lights, brakes and wheel_fl / wheel_fr / wheel_rl / wheel_rr.
+     ------------------------------------------------------------------------ */
+  setLoadProgress(40);
+  const model = createCar({ paint, chrome, glass, tier: quality.tier });
+  ['wheel_fl', 'wheel_fr', 'wheel_rl', 'wheel_rr'].forEach((n) => wheels.push(model.getObjectByName(n)));
+
+  // Brake lights: the tail-light lenses get their own material so only they glow when braking
+  const tailGlass = model.getObjectByName('brakes');
+  tailMat = tailGlass.material = tailGlass.material.clone();
+  tailMat.emissive.set(0xff1010);
+
+  // Suspension: the body (not the wheels) sits in a group that tilts around the axle height
+  chassis = new THREE.Group();
+  chassis.position.y = model.getObjectByName('wheel_fl').position.y;
+  model.add(chassis);
+  chassis.attach(model.getObjectByName('main')); // attach() keeps the world position
+
+  // Wheel motion blur discs (not on the low tier: there the spin is only capped)
+  if (quality.tier !== 'low') wheelBlur = createWheelBlur(model);
+
+  // Soft contact shadow under the car, drawn on a canvas (cheaper than real-time shadows)
+  const contactShadow = createContactShadow();
+  model.add(contactShadow);
+  car.add(model);
+
+  // Light glows, headlight beams, brake glow, road and speed streaks (see effects.js),
+  // placed on this car's head and tail lights
   const fx = createEffects(scene, {
     streakCount: quality.settings.streaks,
     reducedMotion: prefersReducedMotion,
     brakeSpill: quality.tier !== 'low', // the red floor glow behind the car
+    headlights: model.userData.headlights,
+    taillights: model.userData.taillights,
   });
 
-  /* ------------------------------------------------------------------------
-     3. LOAD THE MODEL (GLTFLoader + DRACOLoader). Draco = compressed geometry;
-     the decoder files live in /public/draco (copied from three's package).
-     ------------------------------------------------------------------------ */
-  const draco = new DRACOLoader();
-  draco.setDecoderPath(`${import.meta.env.BASE_URL}draco/`);
-  const gltfLoader = new GLTFLoader();
-  gltfLoader.setDRACOLoader(draco);
-  const textureLoader = new THREE.TextureLoader();
-
-  // A .json source holds the .glb bytes as base64: decode them, then let GLTFLoader parse the bytes
-  function loadGltf(url, onLoad, onProgress, onError) {
-    if (!url.endsWith('.json')) return gltfLoader.load(url, onLoad, onProgress, onError);
-    const fileLoader = new THREE.FileLoader();
-    fileLoader.setResponseType('json');
-    fileLoader.load(
-      url,
-      (data) => {
-        try {
-          const binary = atob(data.glb);
-          const bytes = new Uint8Array(binary.length);
-          for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-          gltfLoader.parse(bytes.buffer, '', onLoad, onError);
-        } catch (err) {
-          onError(err); // broken file: move on to the next source
-        }
-      },
-      onProgress,
-      onError
-    );
-  }
-
-  loadModel(0);
-
-  function loadModel(sourceIndex) {
-    const url = MODEL_SOURCES[sourceIndex];
-    const base = url.slice(0, url.lastIndexOf('/') + 1); // folder that also holds ferrari_ao.png
-    loadGltf(
-      url,
-      (gltf) => {
-        const model = gltf.scene.children[0];
-        // Part names come from the model file (open it in https://gltf-viewer.donmccurdy.com to see yours)
-        model.getObjectByName('body').material = paint;
-        ['rim_fl', 'rim_fr', 'rim_rr', 'rim_rl', 'trim'].forEach((n) => (model.getObjectByName(n).material = chrome));
-        model.getObjectByName('glass').material = glass;
-        ['wheel_fl', 'wheel_fr', 'wheel_rl', 'wheel_rr'].forEach((n) => wheels.push(model.getObjectByName(n)));
-
-        // Low tier: hide the barely visible cabin (~1/3 of the triangles) and darken the glass to match
-        if (quality.tier === 'low') {
-          ['leather', 'interior_light', 'interior_dark', 'carpet', 'steering_wheel'].forEach((n) => {
-            const part = model.getObjectByName(n);
-            if (part) part.visible = false;
-          });
-          glass.opacity = 0.92;
-        }
-
-        // Brake lights + suspension (cosmetic: if this model lacks these parts, skip it, keep the car)
-        try {
-          // The red glass material is shared with other red parts: the tail lights get their own copy
-          const tailGlass = model.getObjectByName('brakes');
-          tailMat = tailGlass.material = tailGlass.material.clone();
-          tailMat.emissive.set(0xff1010);
-          // Suspension: the body (not the wheels) goes in a group that tilts around the axle height
-          chassis = new THREE.Group();
-          chassis.position.y = 0.36; // wheel-centre height (the wheel_* nodes sit at y ≈ 0.36)
-          model.add(chassis);
-          chassis.attach(model.getObjectByName('main')); // attach() keeps the world position
-          const steering = model.getObjectByName('steering_wheel'); // optional: some cars keep it inside 'main'
-          if (steering) chassis.attach(steering);
-        } catch (err) {
-          console.warn('Brake/suspension effect skipped:', err);
-        }
-
-        // Wheel motion blur discs (not on the low tier: there the spin is only capped)
-        if (quality.tier !== 'low') {
-          try {
-            wheelBlur = createWheelBlur(model);
-          } catch (err) {
-            console.warn('Wheel blur skipped:', err);
-          }
-        }
-
-        // Baked contact shadow: a pre-rendered dark smudge under the car (cheaper than real-time shadows)
-        textureLoader.load(
-          base + 'ferrari_ao.png',
-          (aoTexture) => {
-            const shadow = new THREE.Mesh(
-              new THREE.PlaneGeometry(0.655 * 4, 1.3 * 4),
-              new THREE.MeshBasicMaterial({
-                map: aoTexture,
-                blending: THREE.MultiplyBlending,
-                toneMapped: false,
-                transparent: true,
-                premultipliedAlpha: true,
-                depthWrite: false,
-              })
-            );
-            shadow.rotation.x = -Math.PI / 2;
-            shadow.position.y = 0.002;
-            shadow.renderOrder = 2;
-            // upload the image and compile the shader before adding it, so it never causes a hitch
-            renderer.initTexture(aoTexture);
-            renderer
-              .compileAsync(shadow, camera, scene)
-              .catch(() => {})
-              .then(() => {
-                model.add(shadow);
-                needsRender = true;
-              });
-          },
-          undefined,
-          () => (needsRender = true) // no shadow image: draw the car anyway
-        );
-
-        car.add(model);
-        draco.dispose();
-        setLoadProgress(100);
-        loaderText.textContent = 'Warming up the engine'; // the status screen readers hear (no percentages)
-        // WARM-UP behind the loader: compile every shader now (compile() also visits hidden objects
-        // like the road, streaks and light glows) and upload their textures, so nothing freezes the
-        // first time it appears. Never wait longer than 3 s.
-        [...fx.textures, wheelBlur?.texture].filter(Boolean).forEach((t) => renderer.initTexture(t));
-        const compiled = Promise.resolve().then(() => renderer.compileAsync(scene, camera)); // a compile error becomes a rejection
-        Promise.race([compiled, new Promise((r) => setTimeout(r, 3000))])
-          .catch(() => {})
-          .then(() => {
-            needsRender = true; // first draw (geometry upload) happens behind the loader, during onLoaded's delay
-            onLoaded();
-          });
-      },
-      (xhr) => setLoadProgress(Math.min(99, Math.round((xhr.loaded / (xhr.total || MODEL_BYTES)) * 100))),
-      () => {
-        if (sourceIndex + 1 < MODEL_SOURCES.length) loadModel(sourceIndex + 1);
-        else {
-          loaderEl.classList.add('is-error'); // hide the counter and line: nothing reached 100%
-          loaderText.textContent = 'The 3D model could not load. Showing the page without it.';
-          setTimeout(onLoaded, 1800);
-        }
-      }
-    );
-  }
+  setLoadProgress(100);
+  loaderText.textContent = 'Warming up the engine'; // the status screen readers hear (no percentages)
+  // WARM-UP behind the loader: compile every shader now (compile() also visits hidden objects
+  // like the road, streaks and light glows) and upload their textures, so nothing freezes the
+  // first time it appears. Never wait longer than 3 s.
+  [...fx.textures, wheelBlur?.texture, contactShadow.material.alphaMap].filter(Boolean).forEach((t) => renderer.initTexture(t));
+  const compiled = Promise.resolve().then(() => renderer.compileAsync(scene, camera)); // a compile error becomes a rejection
+  Promise.race([compiled, new Promise((r) => setTimeout(r, 3000))])
+    .catch(() => {})
+    .then(() => {
+      needsRender = true; // first draw (geometry upload) happens behind the loader, during onLoaded's delay
+      onLoaded();
+    });
 
   /* ------------------------------------------------------------------------
      4. CAMERA "SHOTS" — one per section. Instead of x/y/z positions we orbit

@@ -13,14 +13,13 @@
    ========================================================================== */
 import * as THREE from 'three';
 
-// Light positions on the Ferrari model (it faces -z), measured from its
-// "lights" (headlight glass) and "brakes" (tail-light glass) meshes.
-// Tweak these for another car.
-const HEADLIGHTS = [
+// Fallback light positions (the car faces -z). main.js passes the real ones from
+// the car's userData, so these only matter if a car doesn't provide them.
+const DEFAULT_HEADLIGHTS = [
   [0.64, 0.61, -1.87],
   [-0.64, 0.61, -1.87],
 ];
-const TAILLIGHTS = [
+const DEFAULT_TAILLIGHTS = [
   [0.7, 0.86, 2.1],
   [-0.7, 0.86, 2.1],
 ];
@@ -47,7 +46,10 @@ const glowTexture = () =>
     ctx.fillRect(0, 0, w, w);
   });
 
-export function createEffects(scene, { streakCount, reducedMotion, brakeSpill }) {
+export function createEffects(
+  scene,
+  { streakCount, reducedMotion, brakeSpill, headlights = DEFAULT_HEADLIGHTS, taillights = DEFAULT_TAILLIGHTS }
+) {
   const group = new THREE.Group();
   scene.add(group);
 
@@ -73,8 +75,8 @@ export function createEffects(scene, { streakCount, reducedMotion, brakeSpill })
     group.add(sprite);
     return sprite;
   };
-  const heads = HEADLIGHTS.map((p) => makeGlow(p, 0xdfe9ff, 0.9, -1));
-  const tails = TAILLIGHTS.map((p) => makeGlow(p, 0xff2a2a, 0.55, 1));
+  const heads = headlights.map((p) => makeGlow(p, 0xdfe9ff, 0.9, -1));
+  const tails = taillights.map((p) => makeGlow(p, 0xff2a2a, 0.55, 1));
   const glows = [...heads, ...tails]; // built once, not every frame
 
   /* ---------------- HEADLIGHT BEAMS ON THE FLOOR ---------------- */
@@ -99,10 +101,10 @@ export function createEffects(scene, { streakCount, reducedMotion, brakeSpill })
     depthWrite: false,
     opacity: 0,
   });
-  const beams = HEADLIGHTS.map(([x]) => {
+  const beams = headlights.map(([x, , z]) => {
     const m = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 7), beamMat);
     m.rotation.x = -Math.PI / 2;
-    m.position.set(x * 1.3, 0.004, -1.9 - 3.5);
+    m.position.set(x * 1.3, 0.004, z - 3.5); // starts at the headlight, reaches 7 m ahead
     m.renderOrder = 3;
     group.add(m);
     return m;
@@ -124,7 +126,7 @@ export function createEffects(scene, { streakCount, reducedMotion, brakeSpill })
       })
     );
     spill.rotation.x = -Math.PI / 2;
-    spill.position.set(0, 0.005, 2.55);
+    spill.position.set(0, 0.005, taillights[0][2] + 0.45); // just behind the tail lights
     spill.renderOrder = 3;
     spill.visible = false;
     group.add(spill);
@@ -286,7 +288,7 @@ export function createWheelBlur(model) {
     opacity: 0,
     depthWrite: false,
   });
-  const geometry = new THREE.CircleGeometry(0.283, 48); // this model's rim radius (0.282 m)
+  const geometry = new THREE.CircleGeometry(model.userData.rimRadius ?? 0.28, 48); // the car's rim radius
   const rims = [];
   const discs = [];
   ['fl', 'fr', 'rl', 'rr'].forEach((id) => {
@@ -316,4 +318,40 @@ export function createWheelBlur(model) {
       for (const r of rims) r.visible = sharp;
     },
   };
+}
+
+/* --------------------------------------------------------------------------
+   CONTACT SHADOW: a soft dark patch under the car, drawn once on a canvas.
+   Real-time shadows would cost a whole extra render; this costs nothing.
+   -------------------------------------------------------------------------- */
+export function createContactShadow(width = 2.5, length = 5.0) {
+  const c = document.createElement('canvas');
+  c.width = 256;
+  c.height = 512;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, c.width, c.height);
+  ctx.filter = 'blur(28px)'; // soft edges
+  ctx.fillStyle = '#fff'; // white = dark shadow (this is an alpha map)
+  ctx.beginPath();
+  ctx.roundRect(52, 60, c.width - 104, c.height - 120, 70); // the car's footprint
+  ctx.fill();
+  ctx.filter = 'blur(10px)';
+  ctx.fillStyle = 'rgba(255,255,255,0.9)';
+  for (const [x, y] of [[62, 150], [194, 150], [62, 372], [194, 372]]) {
+    ctx.beginPath(); // darker spots where the tyres touch the ground
+    ctx.ellipse(x, y, 20, 40, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  const alphaMap = new THREE.CanvasTexture(c);
+  alphaMap.colorSpace = THREE.NoColorSpace;
+  const shadow = new THREE.Mesh(
+    new THREE.PlaneGeometry(width, length),
+    new THREE.MeshBasicMaterial({ color: 0x000000, alphaMap, transparent: true, opacity: 0.85, depthWrite: false })
+  );
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.position.y = 0.002;
+  shadow.renderOrder = 2;
+  shadow.name = 'contact_shadow';
+  return shadow;
 }

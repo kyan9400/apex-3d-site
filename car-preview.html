@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Car preview (dev only)</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #0a0a0d; color: #ddd; font: 13px system-ui, sans-serif; }
+      canvas { display: block; width: 100%; height: 100%; }
+      #bar { position: fixed; top: 8px; left: 8px; display: flex; gap: 6px; flex-wrap: wrap; z-index: 2; }
+      #bar button { background: #222; color: #ddd; border: 1px solid #444; padding: 4px 8px; border-radius: 4px; cursor: pointer; }
+      #info { position: fixed; bottom: 8px; left: 8px; z-index: 2; background: #000a; padding: 4px 8px; border-radius: 4px; }
+    </style>
+  </head>
+  <body>
+    <div id="bar"></div>
+    <div id="info"></div>
+    <canvas id="c"></canvas>
+    <script type="module">
+      // Dev-only page to judge procedural cars: /car-preview.html?variant=a&shot=front
+      import * as THREE from 'three';
+      import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+      const params = new URLSearchParams(location.search);
+      const variant = params.get('variant') || 'a';
+      const canvas = document.getElementById('c');
+      const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+      renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 0.9;
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x0a0a0d);
+      const pmrem = new THREE.PMREMGenerator(renderer);
+      scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+      const ground = new THREE.Mesh(new THREE.CircleGeometry(9, 64), new THREE.MeshStandardMaterial({ color: 0x0c0c10, roughness: 0.6 }));
+      ground.rotation.x = -Math.PI / 2;
+      scene.add(ground);
+
+      // the same materials the site uses
+      const paint = new THREE.MeshPhysicalMaterial({ color: new THREE.Color(params.get('color') || '#b3121f'), metalness: 0.9, roughness: 0.45, clearcoat: 1, clearcoatRoughness: 0.03 });
+      const chrome = new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 1, roughness: 0.35 });
+      const glass = new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.2, roughness: 0.02, transparent: true, opacity: 0.75 });
+
+      const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 100);
+      // the site's camera shots (theta: 180 = front, 90 = right side, 0 = rear)
+      const SHOTS = {
+        hero: [140, 76, 9.5, 0.5], side: [92, 84, 8.5, 0.5], launch: [158, 85.5, 9, 0.55], rear: [-35, 80, 9, 0.5],
+        top: [-110, 45, 9.5, 0.3], lowfront: [-170, 86, 9.5, 0.6], wide: [-220, 72, 11, 0.4], front: [180, 84, 8, 0.5], back: [0, 84, 8, 0.5],
+      };
+      let shot = params.get('shot') || 'hero';
+      function place() {
+        const [theta, phi, dist, ty] = SHOTS[shot];
+        const t = new THREE.Vector3(0, ty, 0);
+        camera.position.setFromSpherical(new THREE.Spherical(dist * 0.62, (phi * Math.PI) / 180, (theta * Math.PI) / 180)).add(t);
+        camera.lookAt(t);
+      }
+      const bar = document.getElementById('bar');
+      Object.keys(SHOTS).forEach((k) => {
+        const b = document.createElement('button');
+        b.textContent = k;
+        b.onclick = () => { shot = k; place(); draw(); };
+        bar.appendChild(b);
+      });
+
+      const mod = await import(`./src/car/variant-${variant}.js`);
+      const t0 = performance.now();
+      const model = mod.createCar({ paint, chrome, glass, tier: params.get('tier') || 'high' });
+      const ms = performance.now() - t0;
+      scene.add(model);
+      let tris = 0, meshes = 0;
+      model.traverse((o) => { if (o.isMesh) { meshes++; const g = o.geometry; tris += (g.index ? g.index.count : g.attributes.position.count) / 3; } });
+      const box = new THREE.Box3().setFromObject(model);
+      const size = box.getSize(new THREE.Vector3());
+      const missing = ['main', 'body', 'glass', 'trim', 'lights', 'brakes', 'wheel_fl', 'wheel_fr', 'wheel_rl', 'wheel_rr', 'rim_fl', 'rim_fr', 'rim_rl', 'rim_rr'].filter((n) => !model.getObjectByName(n));
+      document.getElementById('info').textContent =
+        `variant ${variant} · ${meshes} meshes · ${Math.round(tris / 1000)}k tris · built in ${ms.toFixed(0)} ms · size ${size.x.toFixed(2)} × ${size.y.toFixed(2)} × ${size.z.toFixed(2)}` +
+        (missing.length ? ` · MISSING: ${missing.join(', ')}` : ' · contract OK');
+      window.__preview = { model, scene, camera, renderer, THREE };
+
+      function draw() {
+        const w = innerWidth, h = innerHeight;
+        renderer.setSize(w, h, false);
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        renderer.render(scene, camera);
+      }
+      addEventListener('resize', draw);
+      place();
+      draw();
+    </script>
+  </body>
+</html>

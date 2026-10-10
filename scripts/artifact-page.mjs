@@ -27,8 +27,4 @@ ${body.trim()}
 
 writeFileSync(new URL('apex-motors.html', dist), page);
 
-// Artifacts don't serve .glb files, so ship the model as base64 inside a .json file
-// (main.js decodes it: see loadGltf)
-const glb = readFileSync(new URL('models/ferrari.glb', dist));
-writeFileSync(new URL('models/ferrari.glb.json', dist), JSON.stringify({ glb: glb.toString('base64') }));
 console.log(`dist/apex-motors.html  (script: assets/${jsFile})`);
