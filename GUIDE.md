@@ -29,7 +29,6 @@ apex-3d-site/
 ├─ src/floor.js            the glossy floor reflection (high tier)
 ├─ src/car/                the procedural car: car.js picks the design, CONTRACT.md lists the rules
 ├─ src/style.css           the look
-├─ car-preview.html        dev-only page to look at the car from the site's camera angles
 └─ scripts/artifact-page.mjs   turns the build into a single page for a Claude artifact
 ```
 
@@ -182,8 +181,8 @@ Add `?fps` to the URL to see the frame rate, pixel ratio and whether it's drawin
 ### The car is built in code
 There is no `.glb` file. Every car is made of Three.js shapes in `src/car/`, and each one follows
 `src/car/CONTRACT.md`: the names the page looks for (`main`, `wheel_fl`…`wheel_rr`, `rim_*`, `brakes`),
-the light positions in `userData`, size and orientation. Open `car-preview.html` (via the dev server)
-to look at one car on its own while you work on it.
+the light positions in `userData`, size and orientation.
+To try a design, run `npm run dev` and pick it in the "Build yours" section.
 
 ### The 5 models
 | Button | Model | File |
@@ -228,8 +227,7 @@ The color swatches are the `data-color` buttons in the `#colors` section.
 **Change the camera angles:** edit the `SHOTS` array in `src/main.js`. Tip: with `npm run dev`
 running, open devtools and play with `__debug.shot.theta = 200` to find angles you like.
 
-**Change the car:** open `/car-preview.html?variant=a` while `npm run dev` runs to look at it from every
-camera angle. Each design is a file in `src/car/` that follows `CONTRACT.md`; `src/car/car.js` lists the lineup
+**Change the car:** each design is a file in `src/car/` that follows `CONTRACT.md`; `src/car/car.js` lists the lineup
 in `MODELS` (the first entry, exported as `createCar`, is the car the page opens with); see 'Version 3' above
 to add or reorder models. To use a downloaded model instead, load it with `GLTFLoader` and give its parts the names
 from `CONTRACT.md` (check the model's license first — see below).
