@@ -5,29 +5,32 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#07070a" />
     <title>Apex Motors — Apex GT</title>
-    <meta name="description" content="Apex GT. Built around control, performance and the feeling of freedom." />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <!-- Fonts load without blocking the first paint (display=swap shows system text until they arrive) -->
-    <link
-      rel="preload"
-      as="style"
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Syne:wght@600;700;800&display=swap"
-      onload="this.onload = null; this.rel = 'stylesheet'"
-    />
-    <noscript>
-      <link
-        rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Syne:wght@600;700;800&display=swap"
-      />
-    </noscript>
+    <meta name="description" content="Meet the Apex GT: an interactive 3D sports car built entirely in code. Spin it, change the paint and body style, and feel a 2.9 s launch to 100 km/h." />
+    <!-- Inline SVG favicon: no extra request, no 404 -->
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2307070a'/%3E%3Cpath d='M18 48 32 14l14 34h-8l-6-16-6 16z' fill='%23b3121f'/%3E%3C/svg%3E" />
+    <!-- The Vercel address is the main one; the GitHub Pages copy points here too -->
+    <link rel="canonical" href="https://apex-3d-site.vercel.app/" />
+    <!-- Link previews (social apps, chats) -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Apex Motors" />
+    <meta property="og:title" content="Apex Motors — Apex GT" />
+    <meta property="og:description" content="Meet the Apex GT: an interactive 3D sports car built entirely in code. Spin it, change the paint and body style, and feel a 2.9 s launch to 100 km/h." />
+    <meta property="og:url" content="https://apex-3d-site.vercel.app/" />
+    <meta property="og:image" content="https://apex-3d-site.vercel.app/og-image.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="The Apex GT, a red code-built sports car, in a dark studio" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <!-- The headline font, self-hosted (public/fonts), fetched early so the h1 swaps in fast -->
+    <link rel="preload" href="/fonts/syne-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
     <!-- First thing a keyboard user reaches: jump past the navigation to the content -->
     <a class="skip-link" href="#story">Skip to content</a>
 
-    <!-- LOADER: covers the page until the 3D model is ready, then lifts like a curtain.
+    <!-- LOADER: covers the car stage until the 3D model is ready, then lifts like a curtain.
+         The hero headline sits above it (style.css), so it shows from the first paint.
          The letters and the curtain are pure CSS animations, so they keep moving
          even while the browser is busy preparing the 3D model -->
     <div class="loader" id="loader">
@@ -74,13 +77,13 @@
 
     <!-- Section dots: fixed on the right, so their place in the HTML only sets the Tab order -->
     <nav class="dots" aria-label="Sections">
-      <a href="#hero" aria-current="true"><span class="sr-only">Intro</span></a>
-      <a href="#performance"><span class="sr-only">Performance</span></a>
-      <a href="#launch"><span class="sr-only">Launch control</span></a>
-      <a href="#design"><span class="sr-only">Design</span></a>
-      <a href="#colors"><span class="sr-only">Colors</span></a>
-      <a href="#specs"><span class="sr-only">Specs</span></a>
-      <a href="#reserve"><span class="sr-only">Reserve</span></a>
+      <a href="#hero" data-label="Intro" aria-current="true"><span class="sr-only">Intro</span></a>
+      <a href="#performance" data-label="01 Performance"><span class="sr-only">Performance</span></a>
+      <a href="#launch" data-label="02 Launch"><span class="sr-only">Launch control</span></a>
+      <a href="#design" data-label="03 Design"><span class="sr-only">Design</span></a>
+      <a href="#colors" data-label="04 Colors"><span class="sr-only">Colors</span></a>
+      <a href="#specs" data-label="05 Specs"><span class="sr-only">Specs</span></a>
+      <a href="#reserve" data-label="Reserve"><span class="sr-only">Reserve</span></a>
     </nav>
 
     <main id="story">
@@ -89,19 +92,21 @@
         <div class="hero__inner">
           <p class="eyebrow">2027 Apex GT</p>
           <h1 class="hero__title">
-            <span class="line"><span data-hero-line>Built for</span></span>
-            <span class="line"><span data-hero-line class="accent-text">control.</span></span>
+            <span class="line"><span>Built for</span></span>
+            <span class="line"><span class="accent-text">control.</span></span>
           </h1>
           <p class="hero__sub">
             Performance, precision and the feeling of freedom behind the wheel.
           </p>
+          <div class="hero__actions"><a href="#colors" class="btn">Configure yours</a><a href="#launch" class="btn btn--ghost">Watch it launch</a></div>
+          <dl class="hero__meta"><div><dt>0–100</dt><dd>2.9 s</dd></div><div><dt>Power</dt><dd>710 hp</dd></div><div><dt>Top speed</dt><dd>330 km/h</dd></div></dl>
         </div>
         <div class="scroll-hint" aria-hidden="true"><span></span>Scroll</div>
       </section>
 
       <!-- 2. PERFORMANCE -->
       <section class="section section--left" id="performance" data-scene="1">
-        <div class="panel">
+        <div class="panel panel--bare">
           <p class="eyebrow" data-reveal>01 — Performance</p>
           <h2 data-split>Every number,<br />engineered.</h2>
           <div class="stats">
@@ -122,7 +127,7 @@
       </section>
 
       <!-- 3. LAUNCH CONTROL: a tall section whose content sticks to the screen.
-           Scrolling through it drives the speed (main.js → LAUNCH CONTROL). -->
+           Scrolling through it drives the speed (page.js → LAUNCH CONTROL). -->
       <section class="launch" id="launch" data-scene="2">
         <div class="launch__sticky">
           <div class="launch__hud">
@@ -133,7 +138,7 @@
               <div class="gauge" id="gauge">
                 <svg viewBox="0 0 200 200" aria-hidden="true">
                   <circle class="gauge__track" cx="100" cy="100" r="86" />
-                  <g class="gauge__ticks"></g><!-- filled by main.js -->
+                  <g class="gauge__ticks"></g><!-- filled by page.js -->
                   <circle class="gauge__fill" id="gauge-fill" cx="100" cy="100" r="86" />
                 </svg>
                 <div class="gauge__readout"><span class="gauge__speed" id="launch-speed">0</span><span class="gauge__unit">km/h</span></div>
@@ -150,7 +155,7 @@
 
       <!-- 4. DESIGN -->
       <section class="section section--right" id="design" data-scene="3">
-        <div class="panel">
+        <div class="panel panel--bare">
           <p class="eyebrow" data-reveal>03 — Design</p>
           <h2 data-split>Sculpted<br />by air.</h2>
           <p data-reveal>
@@ -166,7 +171,7 @@
         <div class="panel">
           <p class="eyebrow" data-reveal>04 — Make it yours</p>
           <h2 data-split>Build<br />yours.</h2>
-          <!-- Body style: main.js swaps the 3D car (src/car/car.js lists the models) -->
+          <!-- Body style: scene.js swaps the 3D car (src/car/models.js lists the models) -->
           <div class="config" id="model-config" data-reveal>
             <p class="config__label" id="model-label">Body style</p>
             <div class="models" role="group" aria-labelledby="model-label">
@@ -180,7 +185,7 @@
           </div>
           <p class="config__label" id="paint-label" data-reveal>Paint</p>
           <div class="swatches" role="group" aria-labelledby="paint-label" data-reveal>
-            <!-- data-color is read by main.js and applied to the car's paint -->
+            <!-- data-color is read by page.js and applied to the car's paint (scene.js) -->
             <button class="swatch" data-color="#b3121f" data-name="Rosso Apex" aria-pressed="true" aria-label="Rosso Apex" style="--c:#b3121f"></button>
             <button class="swatch" data-color="#1c2f5a" data-name="Midnight Blue" aria-pressed="false" aria-label="Midnight Blue" style="--c:#1c2f5a"></button>
             <button class="swatch" data-color="#0f4a35" data-name="Racing Green" aria-pressed="false" aria-label="Racing Green" style="--c:#0f4a35"></button>
@@ -188,7 +193,7 @@
             <button class="swatch" data-color="#26272b" data-name="Graphite" aria-pressed="false" aria-label="Graphite" style="--c:#26272b"></button>
             <button class="swatch" data-color="#e8a200" data-name="Solar Yellow" aria-pressed="false" aria-label="Solar Yellow" style="--c:#e8a200"></button>
           </div>
-          <p class="swatch-name"><span id="swatch-name" aria-live="polite">Rosso Apex</span><span class="drag-hint">Drag the car to rotate</span></p>
+          <p class="swatch-name"><span id="swatch-name" aria-live="polite">Rosso Apex</span><span class="drag-tools"><span class="drag-hint">Drag the car to rotate</span><!-- keyboard alternative to dragging (scene.js) --><span class="rotate-btns"><button class="model-btn" type="button" data-rotate="-1" aria-label="Rotate car left">←</button><button class="model-btn" type="button" data-rotate="1" aria-label="Rotate car right">→</button></span></span></p>
         </div>
       </section>
 
@@ -214,18 +219,38 @@
           <p class="eyebrow" data-reveal>Limited to 500 units</p>
           <h2 class="cta__title" data-split>Your drive<br />starts here.</h2>
           <div class="cta__buttons" data-reveal>
-            <a href="#reserve" class="btn">Reserve yours</a>
-            <a href="#specs" class="btn btn--ghost">Book a test drive</a>
-            <button class="btn btn--ghost btn--replay" id="replay" type="button">
+            <button class="btn" type="button" id="reserve-open">Reserve yours</button>
+            <a href="#colors" class="btn btn--ghost">Configure yours</a>
+            <button class="link-btn btn--replay" id="replay" type="button">
               <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4.5h4.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
               Replay the drive
             </button>
           </div>
         </div>
+        <!-- Reserve: an honest note instead of a dead link. No form, no personal data (ui.js → reserveDialog) -->
+        <dialog id="reserve-dialog" class="dialog" aria-labelledby="reserve-title">
+          <h2 id="reserve-title">Reservations</h2>
+          <p>The Apex GT is a design study built entirely in code, so reservations are not open. You can still build yours in the configurator.</p>
+          <div class="dialog__actions">
+            <a href="#colors" class="btn">Configure yours</a>
+            <button type="button" class="btn btn--ghost" data-close>Close</button>
+          </div>
+        </dialog>
         <footer class="footer">
-          <span>© 2026 Alhassan Alfarran · Apex Motors is a fictional brand.</span>
-          <button class="link-btn" id="motion-toggle" type="button">Reduce motion</button>
-          <span>The Apex GT is designed and built entirely in code.</span>
+          <p class="footer__mark" aria-hidden="true">APEX</p>
+          <nav class="footer__links" aria-label="Footer">
+            <a href="#performance">Performance</a>
+            <a href="#launch">Launch</a>
+            <a href="#design">Design</a>
+            <a href="#colors">Configure</a>
+            <a href="#specs">Specs</a>
+            <a href="#hero">Back to top</a>
+          </nav>
+          <div class="footer__legal">
+            <span>© 2026 Alhassan Alfarran · Apex Motors is a fictional brand.</span>
+            <button class="link-btn" id="motion-toggle" type="button">Reduce motion</button>
+            <span>The Apex GT is designed and built entirely in code.</span>
+          </div>
         </footer>
       </section>
     </main>

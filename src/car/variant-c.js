@@ -1602,7 +1602,7 @@ function buildDiffuser() {
 }
 
 /* --------------------------------------------------------------------------
-   12. MATERIALS made here (paint, chrome and glass come from main.js)
+   12. MATERIALS made here (paint, chrome and glass come from scene.js)
    -------------------------------------------------------------------------- */
 function grilleTexture() {
   if (typeof document === 'undefined') return null; // e.g. building in Node: no canvas

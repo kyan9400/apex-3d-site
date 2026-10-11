@@ -514,7 +514,7 @@ export function createCar({ paint, chrome, glass, tier = 'high' }) {
   const k = 1 / q; // station spacing factor
   const V = () => new THREE.Vector3();
 
-  // Materials made here (paint, chrome and glass come from main.js)
+  // Materials made here (paint, chrome and glass come from scene.js)
   const carbon = new THREE.MeshPhysicalMaterial({ color: 0x141518, roughness: 0.42, metalness: 0.25, clearcoat: 0.8, clearcoatRoughness: 0.18 });
   const voidMat = new THREE.MeshStandardMaterial({ color: 0x08080a, roughness: 0.8, metalness: 0, side: THREE.DoubleSide });
   const holeMat = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.DoubleSide }); // openings: pure black

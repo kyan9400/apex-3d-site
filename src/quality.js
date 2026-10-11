@@ -54,7 +54,7 @@ function gpuName(gl) {
 // and integrated laptop / phone graphics.
 export function refineTierFromGPU(gl) {
   quality.gpu = gpuName(gl);
-  // no real GPU: the CPU would draw every frame, so main.js shows the still poster instead
+  // no real GPU: the CPU would draw every frame, so boot.js shows the still poster instead
   quality.software = /swiftshader|llvmpipe|softpipe|software|basic render|mesa offscreen/i.test(quality.gpu);
   if (params.get('quality') in TIERS) return;
   if (quality.software) quality.tier = 'low';

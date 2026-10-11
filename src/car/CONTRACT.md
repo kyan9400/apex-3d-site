@@ -12,11 +12,11 @@ export function createCar({ paint, chrome, glass, tier }) // tier: 'low' | 'medi
 // returns THREE.Group (the "model")
 ```
 
-`paint`, `chrome`, `glass` are materials created by main.js (paint = MeshPhysicalMaterial with clearcoat, colour is
+`paint`, `chrome`, `glass` are materials created by scene.js (paint = MeshPhysicalMaterial with clearcoat, colour is
 changed live by the colour picker; chrome = metal MeshStandardMaterial; glass = dark transparent MeshStandardMaterial).
 Use them for the parts below; create any other materials yourself (tyre rubber, dark trim, interior, light lenses …).
 
-## Required scene graph (names are used by main.js / effects.js)
+## Required scene graph (names are used by scene.js / effects.js)
 
 ```
 model (Group)
@@ -25,10 +25,10 @@ model (Group)
 │   ├─ glass  (Mesh)       windscreen/side glass — material: glass
 │   ├─ trim   (Mesh)       chrome/brightwork accents — material: chrome
 │   ├─ lights (Mesh)       headlight lenses (emissive-looking, white/cool)
-│   ├─ brakes (Mesh)       tail-light lenses — MeshStandardMaterial, red; main.js clones it and drives .emissive
+│   ├─ brakes (Mesh)       tail-light lenses — MeshStandardMaterial, red; scene.js clones it and drives .emissive
 │   └─ …                   anything else (interior, intakes, diffuser, mirrors…), any names
 ├─ wheel_fl / wheel_fr / wheel_rl / wheel_rr (Object3D)
-│      positioned at the axle centre; main.js spins them with rotation.x
+│      positioned at the axle centre; scene.js spins them with rotation.x
 │      ├─ tyre   (Mesh)
 │      ├─ rim_fl / rim_fr / rim_rl / rim_rr (Mesh, material: chrome) — the spoked face, on the OUTER side:
 │      │      rim.position.x = +offset for right wheels (x > 0), −offset for left wheels; y = z = 0

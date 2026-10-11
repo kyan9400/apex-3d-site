@@ -816,7 +816,7 @@ export function createCar({ paint, chrome, glass, tier = 'high' } = {}) {
   main.name = 'main';
   model.add(main);
 
-  // materials made here (paint / chrome / glass come from main.js)
+  // materials made here (paint / chrome / glass come from scene.js)
   const glossBlack = new THREE.MeshStandardMaterial({ color: 0x050507, roughness: 0.18, metalness: 0.4, side: THREE.DoubleSide });
   const satinBlack = new THREE.MeshStandardMaterial({ color: 0x0a0a0c, roughness: 0.55, metalness: 0.2, side: THREE.DoubleSide });
   const lightMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xe6f2ff, emissiveIntensity: 2.4, roughness: 0.25 });

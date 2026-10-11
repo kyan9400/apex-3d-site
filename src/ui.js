@@ -45,25 +45,39 @@ export function splitHeadings(reducedMotion) {
 }
 
 /* --------------------------------------------------------------------------
-   HERO: the intro is ONE paused timeline that main.js plays when the loader
+   HERO: the intro is ONE paused timeline that scene.js plays when the loader
    lifts, in sync with the headlights. fromTo() applies the hidden states right
-   now, while the loader still covers the page, so nothing can flash. Scrolling
+   now, while the curtain is down (style.css keeps them invisible until then too,
+   so nothing can flash). The h1 itself is never hidden: it is the LCP. Scrolling
    away then lifts and fades the hero text (scrubbed = it rewinds on the way back).
    Rule: an element is animated EITHER by the intro OR by the scroll, never both.
    -------------------------------------------------------------------------- */
+// "control." in its lit colour, as an rgb() value GSAP can tween: --accent-hi mixed with
+// 20% white, the same as .accent-text in style.css (plain --accent-hi where color-mix() is missing)
+function litAccentColor() {
+  const hex = getComputedStyle(document.documentElement).getPropertyValue('--accent-hi').trim() || '#b3121f';
+  const white = CSS.supports('color', 'color-mix(in srgb, red, red)') ? 0.2 : 0;
+  const [r, g, b] = [1, 3, 5].map((i) => Math.round(parseInt(hex.slice(i, i + 2), 16) * (1 - white) + 255 * white));
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
 export function heroMotion(reducedMotion) {
   if (reducedMotion) return { play() {} }; // calm mode: everything is simply there
 
   const intro = gsap.timeline({ paused: true, defaults: { ease: 'power3.out' } });
   intro
     .fromTo('#hero .eyebrow', { y: 20, autoAlpha: 0 }, { y: 0, autoAlpha: 1, duration: 0.9 }, 0)
+    // The h1 is never hidden or clipped: it is the page's LCP element and shows from the first paint.
+    // Only its colour settles: "control." lights up with the headlights. The CSS transition is off while
+    // GSAP drives the colour, and clearProps hands it back to CSS (which follows the chosen paint).
     .fromTo(
-      '[data-hero-line]',
-      { yPercent: 110, rotate: 3, transformOrigin: '0% 100%' },
-      { yPercent: 0, rotate: 0, duration: 1.3, ease: 'power4.out', stagger: 0.12 },
-      0.15
+      '.hero__title .accent-text',
+      { color: '#f2f1ee', transition: 'none' },
+      { color: litAccentColor, duration: 1.2, ease: 'power2.out', clearProps: 'color,transition' },
+      0.3
     )
     .fromTo('.hero__sub', { y: 24, autoAlpha: 0 }, { y: 0, autoAlpha: 1, duration: 1 }, 0.55)
+    .fromTo('.hero__actions, .hero__meta', { y: 24, autoAlpha: 0 }, { y: 0, autoAlpha: 1, duration: 1, stagger: 0.1 }, 0.7)
     // then the interface 'powers on': nav slides down, dots pop in, scroll hint last.
     // clearProps hands these elements back to CSS (and to later tweens) when done.
     .fromTo(
@@ -79,6 +93,11 @@ export function heroMotion(reducedMotion) {
       0.9
     )
     .fromTo('.scroll-hint', { y: 16, autoAlpha: 0 }, { y: 0, autoAlpha: 1, duration: 0.8 }, 1.25);
+
+  // A focused hero button must never stay invisible (e.g. Tab before the intro has finished)
+  document.querySelectorAll('.hero__actions, .hero__meta').forEach((el) =>
+    el.addEventListener('focusin', () => gsap.set(el, { y: 0, autoAlpha: 1 }))
+  );
 
   // Scroll-out animates the PARENT .hero__inner, so it never fights the intro (which animates the children)
   gsap.fromTo(
@@ -129,6 +148,8 @@ export function progressUI() {
         if (!isActive) return;
         dots.forEach((d) => d.removeAttribute('aria-current'));
         dot.setAttribute('aria-current', 'true');
+        // the header link of the same section is marked too (underline in style.css)
+        document.querySelectorAll('.nav__links a').forEach((a) => a.toggleAttribute('aria-current', a.getAttribute('href') === dot.getAttribute('href')));
       },
     });
   });
@@ -209,4 +230,28 @@ export function filmGrain(enabled) {
   grain.className = 'grain';
   grain.style.backgroundImage = `url(${c.toDataURL()})`;
   document.body.appendChild(grain);
+}
+
+/* --------------------------------------------------------------------------
+   RESERVE DIALOG: an honest note (the car is a design study, so there is
+   nothing to reserve) and a way to the configurator. No form, no personal data.
+   A native <dialog>: showModal() traps focus, Esc closes it, focus returns.
+   -------------------------------------------------------------------------- */
+export function reserveDialog({ onOpen, onClose } = {}) {
+  const open = document.getElementById('reserve-open');
+  const dlg = document.getElementById('reserve-dialog');
+  if (!open || !dlg) return;
+  open.addEventListener('click', () => {
+    dlg.showModal();
+    onOpen?.();
+  });
+  // The Close button and the "Configure yours" link both close it. onClose runs right away
+  // (the 'close' event comes a moment later), so smooth scrolling is back on before the link scrolls.
+  dlg.querySelectorAll('[data-close], a').forEach((el) =>
+    el.addEventListener('click', () => {
+      dlg.close();
+      onClose?.();
+    })
+  );
+  dlg.addEventListener('close', () => onClose?.()); // Esc closes it too
 }

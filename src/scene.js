@@ -1,14 +1,18 @@
 /* ==========================================================================
-   APEX MOTORS — scroll-driven 3D car showcase
+   APEX MOTORS — the 3D layer (scroll-driven car showcase)
 
    The 4 ingredients of every "premium 3D website":
      1. A 3D model         -> the Apex GT, built entirely in code (src/car/)
      2. A real-time scene  -> Three.js renderer, studio environment lighting, materials
      3. Scroll animation   -> GSAP ScrollTrigger moves the camera as you scroll,
-                              Lenis makes the scrolling smooth
+                              Lenis makes the scrolling smooth (set up in page.js)
      4. Cinematic design   -> dark background, huge type, tinted panels (style.css)
 
+   boot.js loads this file only on devices with a real GPU, after the page has
+   loaded. init(page) receives page.js (the 2D layer) and plugs the 3D into it.
+
    Other files:
+     page.js     -> the 2D layer: loader, scrolling, buttons, launch gauge
      quality.js  -> device tiers, adaptive resolution, ?fps meter
      effects.js  -> light glows, headlight beams, road + speed streaks, brake glow, wheel blur
      ui.js       -> hero intro, split-text headlines, progress bar, cursor, magnetic buttons
@@ -18,242 +22,36 @@ import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import Lenis from 'lenis';
-import { quality, probeGPU, createAdaptiveResolution, createFpsMeter } from './quality.js';
+import { quality, createAdaptiveResolution, createFpsMeter } from './quality.js';
 import { createEffects, createWheelBlur, createContactShadow } from './effects.js';
-import { createCar, MODELS } from './car/car.js';
-import { splitHeadings, progressUI, backgroundWord, cursorAndMagnets, filmGrain, heroMotion } from './ui.js';
-import { reducedMotion as prefersReducedMotion, motionControls } from './motion.js';
-import { createGlossyFloor } from './floor.js';
+import { createCar } from './car/car.js';
+import { filmGrain } from './ui.js';
+// floor.js (the glossy reflection) is imported further down, only on the high tier
 
 gsap.registerPlugin(ScrollTrigger);
 
-/* --------------------------------------------------------------------------
-   DOM
-   -------------------------------------------------------------------------- */
-const canvas = document.getElementById('webgl');
-const loaderEl = document.getElementById('loader');
-const loaderBar = document.getElementById('loader-bar');
-const loaderText = document.getElementById('loader-text');
-const loaderCount = document.getElementById('loader-count');
-document.body.classList.add('is-loading');
-history.scrollRestoration = 'manual'; // always start at the top so the intro plays
-window.scrollTo(0, 0);
-
-// Loader progress: the bar scales (transform = cheap) and the big counter eases to the new value.
-// Only the counter changes per download event; the status text (read by screen readers) does not.
-const loadShown = { pct: 0 };
-function setLoadProgress(pct) {
-  loaderBar.style.transform = `scaleX(${pct / 100})`;
-  gsap.to(loadShown, {
-    pct,
-    duration: prefersReducedMotion ? 0 : 0.4,
-    ease: 'power2.out',
-    overwrite: true, // a new value replaces the running count
-    onUpdate: () => (loaderCount.textContent = Math.round(loadShown.pct)),
-  });
-}
-
-// While the loader covers the page, nothing behind it can be tabbed to (inert = not focusable, not clickable)
-const behindLoader = document.querySelectorAll('.skip-link, header, main, .dots, .motion-toast');
-function setBehindLoaderInert(on) {
-  behindLoader.forEach((el) => (el.inert = on));
-}
-setBehindLoaderInert(true);
-
-/* --------------------------------------------------------------------------
-   1. SMOOTH SCROLL (Lenis) wired into GSAP's ticker so ScrollTrigger and
-      Lenis update on the same frame. `lerp: 0.1` = light smoothing. The
-      camera follows Lenis directly (scrub: true below), so there is only ONE
-      layer of smoothing — two layers made the old version feel laggy.
-   -------------------------------------------------------------------------- */
-let lenis = null;
-if (!prefersReducedMotion) {
-  // respectReducedMotion: false -> motion.js already made the choice; without this Lenis
-  // re-checks the OS setting and turns smoothing off even for 'full motion' visitors
-  lenis = new Lenis({ lerp: 0.1, anchors: true, autoRaf: false, respectReducedMotion: false });
-  lenis.on('scroll', ScrollTrigger.update);
-  gsap.ticker.add((time) => lenis.raf(time * 1000));
-  gsap.ticker.lagSmoothing(0);
-  lenis.stop(); // locked until the loader finishes
-}
-
-/* --------------------------------------------------------------------------
-   2D UI (works even without WebGL)
-   -------------------------------------------------------------------------- */
-motionControls();
-document.fonts?.ready.then(() => ScrollTrigger.refresh()); // web fonts change text sizes → re-measure
-splitHeadings(prefersReducedMotion);
-progressUI();
-backgroundWord(prefersReducedMotion);
-cursorAndMagnets(prefersReducedMotion);
-const hero = heroMotion(prefersReducedMotion); // hidden states now, played after loading
-
-// Body-style buttons: init() plugs the actual car swap into onModel (returns a promise)
-let onModel = null;
-const modelButtons = document.querySelectorAll('.model-btn');
-const modelNote = document.getElementById('model-note');
-const modelGroup = document.querySelector('.models');
-let switching = false;
-modelButtons.forEach((btn) =>
-  btn.addEventListener('click', async () => {
-    if (switching || !onModel || btn.getAttribute('aria-pressed') === 'true') return;
-    const entry = MODELS.find((m) => m.id === btn.dataset.model);
-    switching = true;
-    // the whole group is busy: every button announces it can't be used until the swap ends
-    btn.setAttribute('aria-busy', 'true');
-    modelGroup?.setAttribute('aria-busy', 'true');
-    modelButtons.forEach((b) => b.setAttribute('aria-disabled', 'true'));
-    modelNote.textContent = `Loading ${entry.name}…`; // the polite live region announces the wait
-    try {
-      await onModel(entry);
-      modelButtons.forEach((b) => b.setAttribute('aria-pressed', String(b === btn)));
-      modelNote.textContent = `${entry.name} · ${entry.note}`;
-    } catch (err) {
-      console.error('Model switch failed:', err);
-      modelNote.textContent = 'That model could not load. Please try again.';
-    } finally {
-      btn.removeAttribute('aria-busy');
-      modelGroup?.removeAttribute('aria-busy');
-      modelButtons.forEach((b) => b.removeAttribute('aria-disabled'));
-      switching = false;
-    }
-  })
-);
-
-// Color picker UI works even without WebGL; init() plugs the 3D paint tween into onPaint
-let onPaint = null;
-const swatches = document.querySelectorAll('.swatch');
-const swatchName = document.getElementById('swatch-name');
-swatches.forEach((btn) =>
-  btn.addEventListener('click', () => {
-    setAccent(btn.dataset.color);
-    swatches.forEach((s) => s.setAttribute('aria-pressed', String(s === btn)));
-    swatchName.textContent = btn.dataset.name;
-    onPaint?.(btn.dataset.color);
-  })
-);
-
-// REPLAY THE DRIVE: glide back to the top (the camera rewinds through every shot on the way),
-// then init() turns the engine off and on again. Without WebGL it just scrolls up.
-let onReplay = null;
-const easeInOutCubic = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
-document.getElementById('replay').addEventListener('click', () => {
-  const arrived = () => {
-    const title = document.querySelector('.hero__title');
-    title.setAttribute('tabindex', '-1'); // keyboard users continue from the top too
-    title.focus({ preventScroll: true });
-    onReplay?.();
-  };
-  if (lenis) lenis.scrollTo(0, { duration: 2.6, easing: easeInOutCubic, lock: true, force: true, onComplete: arrived });
-  else {
-    window.scrollTo(0, 0);
-    arrived();
-  }
-});
-
-// Skip link: Lenis scrolls there; this moves keyboard focus too (to <main>, so the hero's h1 is read first)
-document.querySelector('.skip-link').addEventListener('click', () => {
-  const target = document.getElementById('story');
-  target.setAttribute('tabindex', '-1');
-  target.focus({ preventScroll: true });
-});
-
-/* --------------------------------------------------------------------------
-   LAUNCH CONTROL — the #launch section is 320vh tall with a sticky HUD.
-   Scroll progress through it (0..1) becomes speed: 0 → 330 km/h, hitting
-   100 km/h after the same share of scroll as the real 2.9 s launch.
-   The gauge is plain HTML/SVG, so it works even without WebGL; the 3D
-   scene (frame() in init) reads `launch` for the road, streaks and lens.
-   -------------------------------------------------------------------------- */
-const launch = { progress: 0, speed: 0 };
-const speedEl = document.getElementById('launch-speed');
-const timeEl = document.getElementById('launch-time');
-const gaugeWrap = document.getElementById('gauge');
-const gaugeEl = document.getElementById('gauge-fill');
-const badgeEl = document.getElementById('launch-badge');
-const hintEl = document.getElementById('launch-hint');
-const GAUGE_LENGTH = 405.3; // length of the 270° arc in the SVG (see style.css)
-const kmhAt = (p) => (330 * (1 - Math.exp(-3.2 * p))) / (1 - Math.exp(-3.2)); // fast at first, then levels off
-let shownKmh = -1;
-let shownTenths = -1;
-
-// Speedometer ticks every 30 km/h plus an accent mark at 100 km/h (the svg is rotated 135° in CSS,
-// so 0° here is where the arc starts). Drawn once.
-const tick = (kmh, cls = '') => `<line class="${cls}" x1="172" y1="100" x2="179" y2="100" transform="rotate(${(kmh / 330) * 270} 100 100)" />`;
-let ticks = tick(100, 'gauge__mark');
-for (let kmh = 0; kmh <= 330; kmh += 30) ticks += tick(kmh);
-document.querySelector('.gauge__ticks').innerHTML = ticks;
-
-ScrollTrigger.create({
-  trigger: '#launch',
-  start: 'top top',
-  end: 'bottom bottom',
-  onUpdate: ({ progress }) => {
-    launch.progress = progress;
-    // The clock has its own check: km/h barely changes near the top, the time keeps ticking
-    const tenths = Math.round(progress * 270); // elapsed time in 0.1 s steps (27 s for the whole launch)
-    if (tenths !== shownTenths) {
-      shownTenths = tenths;
-      timeEl.textContent = (tenths / 10).toFixed(1);
-    }
-    const kmh = Math.round(kmhAt(progress));
-    if (kmh === shownKmh) return; // only touch the gauge when the number changes
-    shownKmh = kmh;
-    speedEl.textContent = kmh;
-    gaugeEl.style.strokeDashoffset = GAUGE_LENGTH * (1 - kmh / 330);
-    badgeEl.classList.toggle('is-hit', kmh >= 100);
-    gaugeWrap.classList.toggle('is-redline', kmh >= 300);
-    hintEl.style.opacity = progress > 0.06 ? 0 : 1;
-  },
-});
-
-// Launch is a full-screen moment: the nav and section dots step aside while it runs.
-// GSAP owns these properties (no CSS transition on them). We fade `opacity`, not autoAlpha:
-// autoAlpha would add visibility:hidden, and then Tab and screen readers could not reach them.
-// Hidden chrome ignores clicks, and keyboard focus inside brings it back (both in style.css).
-ScrollTrigger.create({
-  trigger: '#launch',
-  start: 'top top',
-  end: 'bottom bottom',
-  onToggle: ({ isActive }) => {
-    document.documentElement.classList.toggle('chrome-tucked', isActive);
-    gsap.to('.nav', { yPercent: isActive && !prefersReducedMotion ? -100 : 0, opacity: isActive ? 0 : 1, duration: 0.5, ease: 'power2.out', overwrite: 'auto' });
-    gsap.to('.dots', { opacity: isActive ? 0 : 1, duration: 0.4, overwrite: 'auto' }); // opacity only: .dots uses transform to centre itself
-  },
-});
+// Let the browser handle taps and scrolls between the heavy build steps (helps INP on phones)
+const yieldToMain = () => new Promise((r) => setTimeout(r, 0));
 
 /* --------------------------------------------------------------------------
    2. RENDERER, SCENE, CAMERA
+   boot.js already ran probeGPU(), so the quality tier is final here.
    -------------------------------------------------------------------------- */
-// probeGPU() checks for WebGL 2 and reads the GPU name, so the quality tier is final
-// before the renderer is created
-function startScene() {
-  if (!probeGPU()) {
-    showFatal('Your browser does not support WebGL 2, so the 3D car is hidden. The rest of the page still works.');
-  } else if (quality.software && !quality.forced) {
-    showPoster(); // no GPU: a still of the car instead of a slideshow drawn by the CPU
-  } else {
-    try {
-      init();
-    } catch (err) {
-      // e.g. the GPU is blocklisted or too many WebGL pages are open
-      console.error(err);
-      showFatal('The 3D view could not start on this device. The rest of the page still works.');
-    }
+export async function init(page) {
+  try {
+    await build(page);
+  } catch (err) {
+    // e.g. the GPU is blocklisted or too many WebGL pages are open
+    console.error(err);
+    page.showFatal('The 3D view could not start on this device. The rest of the page still works.');
   }
 }
-// Building the car is heavy, synchronous work. Running it straight away kept the browser from
-// painting anything, even the loader, for seconds on phones. Let the loader paint first, then build
-// once the page has loaded and the browser is idle (the loader covers the wait).
-function afterLoadIdle(fn) {
-  const idle = () => ('requestIdleCallback' in window ? requestIdleCallback(fn, { timeout: 1500 }) : setTimeout(fn, 200));
-  if (document.readyState === 'complete') idle();
-  else window.addEventListener('load', idle, { once: true });
-}
-afterLoadIdle(startScene);
 
-function init() {
+async function build(page) {
+  // The shared state and helpers from the 2D layer (page.js)
+  const { launch, hooks, hero, kmhAt, setLoadProgress, loaderText, prefersReducedMotion } = page;
+  const canvas = document.getElementById('webgl');
+
   const renderer = new THREE.WebGLRenderer({
     canvas,
     antialias: quality.settings.antialias,
@@ -270,10 +68,27 @@ function init() {
   const fpsMeter = createFpsMeter();
 
   const scene = new THREE.Scene();
+  let needsRender = true; // render on demand: set to true whenever the picture must be redrawn
 
   // Studio lighting without any image download: RoomEnvironment is a built-in
   // virtual photo studio. PMREM turns it into reflections for shiny materials.
   const room = new RoomEnvironment();
+  // A glowing panel: in the baked reflections it reads as a studio softbox (costs nothing per frame)
+  const softbox = (w, l, power) =>
+    new THREE.Mesh(
+      new THREE.PlaneGeometry(w, l),
+      new THREE.MeshBasicMaterial({ color: new THREE.Color().setScalar(power), side: THREE.DoubleSide })
+    );
+  const top = softbox(1.6, 22, 40);
+  top.rotation.x = Math.PI / 2;
+  top.position.set(0, 20, 0);
+  room.add(top); // one long strip overhead = a clean highlight down the bonnet and roof
+  for (const s of [-1, 1]) {
+    const side = softbox(22, 0.8, 18); // 22 long (front to back after the turn), 0.8 tall
+    side.rotation.y = (s * Math.PI) / 2;
+    side.position.set(s * 13, 4, 0); // low enough that the line lands on the shoulder, not the roof edge
+    room.add(side); // side strips = a crisp line along each shoulder
+  }
   let envTarget = null;
   // Studio reflections live only on the GPU, so they are rebuilt if the GPU context is lost
   // (driver reset, sleep/resume); otherwise the paint would turn almost black
@@ -289,6 +104,8 @@ function init() {
     makeEnvironment();
     needsRender = true;
   });
+  setLoadProgress(20);
+  await yieldToMain();
 
   const camera = new THREE.PerspectiveCamera(32, view.w / view.h, 0.1, 100);
 
@@ -308,9 +125,9 @@ function init() {
 
   const fadeTex = new THREE.CanvasTexture(fade);
   const groundMat =
-    quality.tier === 'low'
-      ? // low tier: flat dark floor, ~10x cheaper per pixel (it can cover the whole screen)
-        new THREE.MeshBasicMaterial({ color: 0x08080b, alphaMap: fadeTex, transparent: true, depthWrite: false })
+    !quality.settings.reflection
+      ? // no glossy floor (low + medium, so every phone): flat dark floor, ~10x cheaper per pixel (it can cover the whole screen)
+        new THREE.MeshBasicMaterial({ color: 0x0a0a0d, alphaMap: fadeTex, transparent: true, depthWrite: false })
       : new THREE.MeshStandardMaterial({
           color: 0x060608,
           roughness: 0.6,
@@ -324,9 +141,6 @@ function init() {
   ground.rotation.x = -Math.PI / 2;
   scene.add(ground);
 
-  // Glossy floor: a soft real reflection of the car on top of the dark disc (floor.js, high tier only)
-  const floor = quality.settings.reflection ? createGlossyFloor(scene) : null;
-
   /* ------------------------------------------------------------------------
      MATERIALS: the paint is a MeshPhysicalMaterial with a clearcoat layer,
      which is what makes car paint look wet and expensive.
@@ -339,6 +153,15 @@ function init() {
     clearcoatRoughness: 0.03,
   });
   const chrome = new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 1, roughness: 0.35 });
+  // Wheels get their own finish (swapped in by installCar, so the car files stay unchanged)
+  const rimMat =
+    quality.tier === 'low'
+      ? new THREE.MeshStandardMaterial({ color: 0xc9ccd1, metalness: 1, roughness: 0.18 }) // weak phones: same look, cheaper shader
+      : new THREE.MeshPhysicalMaterial({ color: 0xc9ccd1, metalness: 1, roughness: 0.18, clearcoat: 0.5, clearcoatRoughness: 0.06 }); // machined alloy under lacquer
+  const tyreMat = new THREE.MeshStandardMaterial({ color: 0x1b1c1f, roughness: 0.68, metalness: 0 }); // rubber with a soft sheen so the sidewall shape shows
+  // Some tyres are open shells (no inner wall) and need both faces drawn, or you see through the wheel
+  const tyreMatDS = tyreMat.clone();
+  tyreMatDS.side = THREE.DoubleSide;
   // Glass needs no physical-only feature, so the standard material looks the same here with a cheaper shader
   const glass = new THREE.MeshStandardMaterial({
     color: 0x111111,
@@ -363,7 +186,6 @@ function init() {
      returns the parts by name: main (the body group), body, glass, trim,
      lights, brakes and wheel_fl / wheel_fr / wheel_rl / wheel_rr.
      ------------------------------------------------------------------------ */
-  setLoadProgress(40);
   let model = null; // the car currently on screen
   let fx = null; // the effects (created below, once the first car's light positions are known)
 
@@ -378,6 +200,20 @@ function init() {
     model = next;
     wheels.length = 0;
     ['wheel_fl', 'wheel_fr', 'wheel_rl', 'wheel_rr'].forEach((n) => wheels.push(model.getObjectByName(n)));
+    // Alloy rims and rubber tyres (only inside the wheels, so chrome trim on the body stays chrome)
+    const replaced = new Set(); // the car's own wheel materials that we swap out
+    for (const w of wheels)
+      w.traverse((o) => {
+        if (!o.isMesh || o.name === 'rim_blur') return;
+        const old = o.material;
+        if (o.name === 'tyre') o.material = old.side === THREE.DoubleSide ? tyreMatDS : tyreMat; // keep the car's own side setting
+        else if (/^rim_/.test(o.name)) o.material = rimMat;
+        if (o.material !== old) replaced.add(old);
+      });
+    // Free the swapped-out materials, unless they are shared or still used somewhere else on the car
+    const shared = sharedMaterials();
+    model.traverse((o) => o.isMesh && [].concat(o.material).forEach((m) => replaced.delete(m)));
+    replaced.forEach((m) => !shared.has(m) && m.dispose());
 
     // Brake lights: the tail-light lenses get their own material so only they glow when braking
     const tailGlass = model.getObjectByName('brakes');
@@ -392,6 +228,7 @@ function init() {
 
     // Wheel motion blur discs (not on the low tier: there the spin is only capped)
     wheelBlur = quality.tier !== 'low' ? createWheelBlur(model) : null;
+    if (wheelBlur) renderer.initTexture(wheelBlur.texture); // upload now, in the dark swap, not mid-launch
 
     car.add(model);
     fx?.setLights(model.userData.headlights, model.userData.taillights); // glows follow the new lights
@@ -400,8 +237,9 @@ function init() {
 
   // Frees a removed car's GPU memory (its geometry and its own materials; the shared
   // paint / chrome / glass stay because the next car uses them too)
+  const sharedMaterials = () => new Set([paint, chrome, glass, rimMat, tyreMat, tyreMatDS]);
   function disposeCar(old) {
-    const shared = new Set([paint, chrome, glass]);
+    const shared = sharedMaterials();
     old.traverse((o) => {
       if (!o.isMesh || o.name === 'rim_blur') return; // wheelBlur.dispose() frees those
       o.geometry.dispose();
@@ -414,6 +252,8 @@ function init() {
   }
 
   installCar(createCar({ paint, chrome, glass, tier: quality.tier }));
+  setLoadProgress(55);
+  await yieldToMain();
 
   // Soft contact shadow under the car, drawn on a canvas (cheaper than real-time shadows).
   // It belongs to the stage, not to a car, so it stays when the model changes.
@@ -429,15 +269,29 @@ function init() {
     headlights: model.userData.headlights,
     taillights: model.userData.taillights,
   });
+  setLoadProgress(75);
+  await yieldToMain();
+
+  // Glossy floor: a soft real reflection of the car on top of the dark disc (high tier only,
+  // so floor.js and three's Reflector are only downloaded there)
+  // Optional: if floor.js fails to download, the car still shows, just without the reflection
+  const floor = quality.settings.reflection
+    ? await import('./floor.js')
+        .then((m) => m.createGlossyFloor(scene))
+        .catch((e) => (console.warn('Glossy floor skipped:', e), null))
+    : null;
+  setLoadProgress(85);
+  await yieldToMain();
 
   setLoadProgress(100);
   loaderText.textContent = 'Warming up the engine'; // the status screen readers hear (no percentages)
   // WARM-UP behind the loader: compile every shader now (compile() also visits hidden objects
   // like the road, streaks and light glows) and upload their textures, so nothing freezes the
-  // first time it appears. Never wait longer than 3 s.
+  // first time it appears. Never wait longer than 3 s (1.2 s on low/medium: there the page opens sooner).
   [...fx.textures, wheelBlur?.texture, contactShadow.material.alphaMap].filter(Boolean).forEach((t) => renderer.initTexture(t));
   const compiled = Promise.resolve().then(() => renderer.compileAsync(scene, camera)); // a compile error becomes a rejection
-  Promise.race([compiled, new Promise((r) => setTimeout(r, 3000))])
+  const compileCap = quality.tier === 'high' ? 3000 : 1200;
+  Promise.race([compiled, new Promise((r) => setTimeout(r, compileCap))])
     .catch(() => {})
     .then(() => {
       needsRender = true; // first draw (geometry upload) happens behind the loader, during onLoaded's delay
@@ -507,8 +361,8 @@ function init() {
   const intro = { dist: prefersReducedMotion ? 1 : 1.5, theta: prefersReducedMotion ? 0 : -40 };
 
   /* ------------------------------------------------------------------------
-     5. BRAKES — the launch itself (gauge + `launch` speed) is set up at the
-     top of this file, under LAUNCH CONTROL, so it works without WebGL too.
+     5. BRAKES — the launch itself (gauge + `launch` speed) is set up in
+     page.js, under LAUNCH CONTROL, so it works without WebGL too.
      ------------------------------------------------------------------------ */
   // Launch ends -> brakes: the tail lights flare, then glow while the camera swings round to the rear.
   // (overwrite 'auto', not true, so the ignition tweens on `look` are never killed)
@@ -561,6 +415,13 @@ function init() {
     end: 'bottom 40%',
     onToggle: ({ isActive }) => (drag.enabled = isActive),
   });
+  // Keyboard alternative to dragging: the arrow buttons turn the car 30°.
+  // Minus, like a drag: dragging right lowers the offset, so → spins the car the same way
+  document.querySelectorAll('[data-rotate]').forEach((b) =>
+    b.addEventListener('click', () => {
+      gsap.to(drag, { offset: drag.offset - 30 * b.dataset.rotate, duration: prefersReducedMotion ? 0 : 0.6, ease: 'power3.out' });
+    })
+  );
 
   // Subtle parallax: the camera follows the mouse a little (desktop only)
   const pointer = { x: 0, y: 0, sx: 0, sy: 0 };
@@ -573,7 +434,7 @@ function init() {
 
   // Wheels spin with scroll speed (Lenis gives us velocity)
   let wheelSpeed = 0;
-  lenis?.on('scroll', ({ velocity }) => (wheelSpeed = velocity));
+  page.lenis?.on('scroll', ({ velocity }) => (wheelSpeed = velocity));
 
   /* ------------------------------------------------------------------------
      RENDER LOOP — "render on demand": we update everything every frame, but
@@ -586,7 +447,6 @@ function init() {
   const DEG = Math.PI / 180;
   const state = new Float32Array(20); // numbers that describe the current picture (unused slots stay 0)
   const lastState = new Float32Array(20);
-  let needsRender = true;
   let renderedLastFrame = false;
   let lastTime = 0;
 
@@ -630,6 +490,14 @@ function init() {
     // Launch 'dolly zoom' (the Vertigo shot): the lens widens while the camera moves in by exactly
     // the same amount, so the car keeps its size but the road and streaks stretch past it
     const s = launch.speed;
+    // The launch road (opacity = speed * 6 in effects.js) covers the floor: fade the reflection out
+    // as the road fades in (so its edges beside the road never pop), then skip its second render pass.
+    // Calm mode draws no road, so there the reflection always stays.
+    if (floor) {
+      const strength = prefersReducedMotion ? 1 : Math.max(0, 1 - s * 6);
+      floor.setStrength(strength);
+      floor.mirror.visible = strength > 0;
+    }
     const fov = prefersReducedMotion ? 32 : 32 + s * 14; // tuning knob: the 14 (try 10 if phones look too wide)
     const dolly = Math.tan(16 * DEG) / Math.tan((fov / 2) * DEG); // 1 when parked, ~0.68 at top speed
 
@@ -710,7 +578,7 @@ function init() {
     for (let i = 0; i < state.length && !changed; i++) changed = Math.abs(state[i] - lastState[i]) > 1e-5;
 
     if (changed) {
-      floor?.fit(view.w * resolution.dpr, view.h * resolution.dpr); // reflection texture = half the drawing size
+      floor?.fit(view.w, view.h); // half the CSS size: the blur hides it, and DPR steps no longer reallocate it
       renderer.render(scene, camera);
       lastState.set(state);
       needsRender = false;
@@ -719,7 +587,7 @@ function init() {
     fpsMeter?.({ fps: resolution.fps, dpr: resolution.dpr, rendering: changed });
   }
   renderer.setAnimationLoop(frame);
-  if (import.meta.env.DEV) window.__debug = { THREE, camera, shot, intro, look, pitch, car, launch, fx, scene, renderer, resolution, lenis }; // inspect in devtools
+  if (import.meta.env.DEV) window.__debug = { THREE, camera, shot, intro, look, pitch, car, launch, fx, scene, renderer, resolution, lenis: page.lenis }; // inspect in devtools
 
   // Watch the canvas box itself: it changes when the window is resized, but not when the
   // scrollbar appears after loading (scrollbar-gutter in style.css) or when a phone's toolbar
@@ -752,28 +620,49 @@ function init() {
 
   /* ------------------------------------------------------------------------
      7. COLOR PICKER: tween the paint color in 3D (the buttons and the CSS
-     accent are wired at the top of this file, so they work without WebGL)
+     accent are wired in page.js, so they work without WebGL)
      ------------------------------------------------------------------------ */
-  // Body-style switcher: build the chosen car (its file downloads the first time), compile its
-  // shaders while the old car is still showing, then "lights off → swap → lights on"
-  onModel = async (entry) => {
+  // Body-style switcher: download the car file first (often already done: page.js prefetches it
+  // when the pointer or focus reaches the button), then "lights off → build in the dark → lights on"
+  hooks.onModel = async (entry) => {
     const make = await entry.load();
-    const next = make({ paint, chrome, glass, tier: quality.tier });
-    await renderer.compileAsync(next, camera, scene).catch(() => {}); // no shader hitch at the swap
-    if (prefersReducedMotion) return installCar(next);
+    // build the car and compile its shaders before it is shown (no hitch at the swap)
+    const buildNext = async () => {
+      const next = make({ paint, chrome, glass, tier: quality.tier });
+      await renderer.compileAsync(next, camera, scene).catch(() => {});
+      return next;
+    };
+    if (prefersReducedMotion) return installCar(await buildNext()); // calm mode: a plain swap
+
+    // 1. lights off (onInterrupt too, so a killed tween never leaves the buttons stuck)
+    await new Promise((resolve) =>
+      gsap.to(look, { exposure: 0.12, lights: 0, duration: 0.35, ease: 'power2.in', overwrite: 'auto', onComplete: resolve, onInterrupt: resolve })
+    );
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); // the dark frame reaches the screen first
+    // 2. build and swap while the stage is dark (if the build fails, bring the lights back first)
+    try {
+      installCar(await buildNext());
+    } catch (err) {
+      gsap.to(look, { exposure: 0.9, lights: 0.9, envSpin: 0, duration: 0.6, overwrite: 'auto' });
+      throw err; // page.js still shows "That model could not load"
+    }
+    // 3. headlights flicker on while the studio lights sweep over the new car
     await new Promise((resolve) =>
       gsap
-        .timeline({ onComplete: resolve })
-        .to(look, { exposure: 0.12, lights: 0, duration: 0.35, ease: 'power2.in', overwrite: 'auto' })
-        .add(() => installCar(next))
-        .to(look, { lights: 1, duration: 0.07, repeat: 3, yoyo: true, ease: 'none' }, '+=0.12') // headlight flicker
-        .to(look, { lights: 0.9, exposure: 0.9, duration: 0.6, ease: 'power2.out' })
+        .timeline({ onComplete: resolve, onInterrupt: resolve })
+        .set(look, { envSpin: -1.4 }, 0)
+        .to(look, { envSpin: 0, duration: 1.8, ease: 'power3.out', overwrite: 'auto' }, 0.1) // the light sweep
+        .to(look, { lights: 1, duration: 0.07, repeat: 3, yoyo: true, ease: 'none' }, 0.12) // headlight flicker
+        .to(look, { lights: 0.9, exposure: 0.9, duration: 0.6, ease: 'power2.out' }, '>')
     );
   };
 
-  onPaint = (hex) => {
+  hooks.onPaint = (hex) => {
     const color = new THREE.Color(hex);
-    gsap.to(paint.color, { r: color.r, g: color.g, b: color.b, duration: prefersReducedMotion ? 0 : 0.8, ease: 'power2.out' });
+    // overwrite: a quick second click replaces the first tween instead of fighting it
+    gsap.to(paint.color, { r: color.r, g: color.g, b: color.b, duration: prefersReducedMotion ? 0 : 0.8, ease: 'power2.out', overwrite: true });
+    // a light pass reveals the new colour
+    if (!prefersReducedMotion) gsap.fromTo(look, { envSpin: -0.9 }, { envSpin: 0, duration: 1.4, ease: 'power3.out', overwrite: 'auto' });
   };
 
   /* ------------------------------------------------------------------------
@@ -784,33 +673,32 @@ function init() {
   function onLoaded() {
     if (started) return;
     started = true;
-    // 450 ms: the counter (already at 100) is seen landing before the curtain lifts
+    // 450 ms (150 ms on low/medium): the counter (already at 100) is seen landing before the curtain lifts
     setTimeout(() => {
-      loaderEl.classList.add('is-done');
-      document.body.classList.remove('is-loading');
-      setBehindLoaderInert(false); // the page can be tabbed to again
-      lenis?.start();
-      ScrollTrigger.refresh();
+      // false = page.js leaves the hero text to the ignition below. It returns false if the page
+      // was already opened (boot.js safety timer): then the text has played, so don't replay it
+      const fresh = page.openPage(false);
       if (prefersReducedMotion) return;
-      ignition(0.35); // with this delay the intro starts as the lifting curtain uncovers the title
-    }, 450);
+      ignition(0.35, fresh); // with this delay the intro starts as the lifting curtain uncovers the title
+    }, quality.tier === 'high' ? 450 : 150);
   }
 
   // The engine start: camera swings in, headlights flicker on, studio lights sweep over the paint,
   // and the hero text + interface power on with the headlights (heroMotion in ui.js)
-  function ignition(delay) {
-    return gsap
+  function ignition(delay, withText = true) {
+    const tl = gsap
       .timeline({ delay })
       .to(intro, { dist: 1, theta: 0, duration: 2.8, ease: 'power3.out' }, 0)
       .to(look, { lights: 1, duration: 0.07, repeat: 4, yoyo: true, ease: 'none' }, 0.25) // ignition flicker
       .to(look, { lights: 0.9, duration: 0.4 }, 0.65)
       .to(look, { exposure: 0.9, duration: 1.9, ease: 'power2.inOut' }, 0.5)
-      .to(look, { envSpin: 0, duration: 3, ease: 'power3.out' }, 0.2) // light sweep across the body
-      .add(() => hero.restart(), 0.45);
+      .to(look, { envSpin: 0, duration: 3, ease: 'power3.out' }, 0.2); // light sweep across the body
+    if (withText) tl.add(() => hero.restart(), 0.45);
+    return tl;
   }
 
   // Replay (button at the end of the page): engine off — lights out, text gone — then ignition again
-  onReplay = () => {
+  hooks.onReplay = () => {
     if (prefersReducedMotion) return; // calm mode: arriving at the top is enough
     gsap
       .timeline()
@@ -820,94 +708,4 @@ function init() {
       .set(look, { envSpin: -1.8 })
       .add(() => ignition(0.25));
   };
-}
-
-/* ==========================================================================
-   TEXT ANIMATIONS (the hero intro lives in ui.js → heroMotion)
-   ========================================================================== */
-if (!prefersReducedMotion) {
-  // Reveal on scroll: anything with data-reveal fades/slides up once it enters
-  gsap.utils.toArray('[data-reveal]').forEach((el) => {
-    const tween = gsap.from(el, {
-      y: 40,
-      opacity: 0,
-      duration: 1,
-      ease: 'power3.out',
-      scrollTrigger: { trigger: el, start: 'top 88%', once: true },
-    });
-    el.addEventListener('focusin', () => tween.progress(1), { once: true }); // a focused control must never be invisible
-  });
-}
-
-// Counting numbers (0 -> 710 etc.)
-document.querySelectorAll('[data-count]').forEach((el) => {
-  const end = parseFloat(el.dataset.count);
-  const decimals = parseInt(el.dataset.decimals || '0', 10);
-  el.setAttribute('aria-hidden', 'true');
-  el.insertAdjacentHTML('afterend', `<span class="sr-only">${end.toFixed(decimals)}</span>`); // screen readers get the final number
-  if (prefersReducedMotion) {
-    el.textContent = end.toFixed(decimals);
-    return;
-  }
-  const counter = { v: 0 };
-  gsap.to(counter, {
-    v: end,
-    duration: 2,
-    ease: 'power2.out',
-    scrollTrigger: { trigger: el, start: 'top 85%', once: true },
-    onUpdate: () => (el.textContent = counter.v.toFixed(decimals)),
-  });
-});
-
-/* ==========================================================================
-   HELPERS
-   ========================================================================== */
-
-// UI colors follow the paint. Only plain hex values go into the CSS variables
-// (color-mix() inside a variable breaks older Safari):
-//   --accent     the real paint: button, badge and loader fills
-//   --accent-hi  thin lines and small marks on black; very dark paints get a lighter tint
-//   --accent-ink text on top of --accent, picked from the color that is really painted
-function luminance(hex) {
-  const c = new THREE.Color(hex); // THREE.Color is linear = WCAG relative luminance
-  return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
-}
-function mixWithWhite(hex, t) {
-  const channels = [1, 3, 5].map((i) => {
-    const v = parseInt(hex.slice(i, i + 2), 16);
-    return Math.round(v + (255 - v) * t).toString(16).padStart(2, '0');
-  });
-  return '#' + channels.join('');
-}
-function setAccent(hex) {
-  const lum = luminance(hex);
-  const root = document.documentElement.style;
-  root.setProperty('--accent', hex);
-  root.setProperty('--accent-hi', lum < 0.06 ? mixWithWhite(hex, 0.5) : hex);
-  root.setProperty('--accent-ink', lum > 0.19 ? '#111' : '#fff'); // 0.19 = where white and #111 give equal contrast
-}
-
-// No GPU: show the still poster (style.css .poster) and open the page straight away
-function showPoster() {
-  document.documentElement.classList.add('no-webgl'); // hides the body-style switcher, shows the poster
-  loaderEl.classList.add('is-done');
-  document.body.classList.remove('is-loading');
-  setBehindLoaderInert(false);
-  lenis?.start();
-  ScrollTrigger.refresh();
-  hero.play();
-}
-
-function showFatal(message) {
-  document.documentElement.classList.add('no-webgl'); // hides the body-style switcher
-  loaderEl.classList.add('is-error'); // no "0%" next to the error message
-  loaderText.textContent = message;
-  setTimeout(() => {
-    loaderEl.classList.add('is-done');
-    document.body.classList.remove('is-loading');
-    setBehindLoaderInert(false);
-    lenis?.start();
-    ScrollTrigger.refresh(); // the scrollbar just appeared
-    hero.play(); // no 3D, but the hero text and the nav still power on
-  }, 2500);
 }

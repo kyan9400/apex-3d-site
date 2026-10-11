@@ -13,7 +13,7 @@
    ========================================================================== */
 import * as THREE from 'three';
 
-// Fallback light positions (the car faces -z). main.js passes the real ones from
+// Fallback light positions (the car faces -z). scene.js passes the real ones from
 // the car's userData, so these only matter if a car doesn't provide them.
 const DEFAULT_HEADLIGHTS = [
   [0.64, 0.61, -1.87],
@@ -199,7 +199,7 @@ export function createEffects(
   let travel = 0;
 
   return {
-    // Every canvas texture, so main.js can upload them to the GPU behind the loader
+    // Every canvas texture, so scene.js can upload them to the GPU behind the loader
     textures: [glowTex, beamTex, roadTex, roadFade],
     // Move the glows, beams and brake glow onto another car's lights (model switcher)
     setLights(newHeadlights, newTaillights) {

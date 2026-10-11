@@ -1180,7 +1180,7 @@ function buildCaliper(angle, seg) {
 }
 
 /* --------------------------------------------------------------------------
-   9. createCar — assemble everything with the names main.js expects
+   9. createCar — assemble everything with the names scene.js expects
    -------------------------------------------------------------------------- */
 const TIERS = {
   low: { stations: 96, cols: 44, dense: 90, wheel: 36, detail: 0 },
@@ -1191,7 +1191,7 @@ const TIERS = {
 export function createCar({ paint, chrome, glass, tier = 'high' }) {
   const q = TIERS[tier] || TIERS.high;
 
-  // Materials made here (main.js owns paint, chrome and glass)
+  // Materials made here (scene.js owns paint, chrome and glass)
   const matte = new THREE.MeshStandardMaterial({ color: 0x060607, roughness: 0.9, metalness: 0 });
   const carbon = new THREE.MeshStandardMaterial({ color: 0x121215, roughness: 0.35, metalness: 0.4 });
   const decal = { polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 }; // drawn a hair in front

@@ -21,20 +21,33 @@ Get those four right and you have "a $5k website".
 ```
 apex-3d-site/
 ├─ index.html              page structure: 7 <section data-scene="N"> blocks
-├─ src/main.js             the 3D scene, camera shots and scroll wiring (commented step by step)
+├─ src/boot.js             the entry point: decides which layers to load (GPU check runs here, once)
+├─ src/page.js             the 2D layer: loader, Lenis, buttons, launch gauge, reveals (no three.js)
+├─ src/scene.js            the 3D layer: scene, camera shots and scroll wiring (commented step by step)
 ├─ src/quality.js          device tiers, GPU check, adaptive resolution, ?fps meter
 ├─ src/effects.js          light glows, headlight beams, road + speed streaks, brake glow, wheel blur
 ├─ src/ui.js               hero intro, split-text headings, progress bar, dots, cursor, film grain
 ├─ src/motion.js           the reduced-motion choice (OS setting + "Turn on full motion")
 ├─ src/floor.js            the glossy floor reflection (high tier)
-├─ src/car/                the procedural car: car.js picks the design, CONTRACT.md lists the rules
-├─ src/style.css           the look
+├─ src/car/                the procedural car: models.js lists the lineup, CONTRACT.md lists the rules
+├─ src/style.css           the look (the build inlines it into index.html)
+├─ public/fonts/           Syne + Inter, self-hosted (from Fontsource)
+├─ public/og-image.jpg     the link-preview picture (made from the poster with ffmpeg)
 └─ scripts/artifact-page.mjs   turns the build into a single page for a Claude artifact
 ```
 
-### How `src/main.js` works
+### How it loads: three files, two layers
 
-1. **Smooth scroll (Lenis).** `new Lenis(...)` replaces the browser's jumpy wheel scroll with
+- `boot.js` runs first. It starts downloading `page.js` straight away and checks the GPU (`probeGPU`).
+- `page.js` is the 2D page: small, and everything in it works without WebGL.
+- `scene.js` is the 3D car. With a real GPU it downloads after the page has loaded and the browser is
+  idle, so the headline paints first. Without a GPU it never downloads: the poster shows instead.
+- `scene.js` exports `init(page)`. It reads the shared state from `page.js` (`page.launch`,
+  `page.lenis`, `page.hero`…) and plugs the 3D into `page.hooks` (`onModel`, `onPaint`, `onReplay`).
+
+### How `src/scene.js` works
+
+1. **Smooth scroll (Lenis, in `page.js`).** `new Lenis(...)` replaces the browser's jumpy wheel scroll with
    eased scrolling. It is hooked into GSAP's ticker so both update on the same frame:
    `lenis.on('scroll', ScrollTrigger.update)`.
 2. **Renderer, scene, camera.** `THREE.WebGLRenderer` with `alpha: true` (transparent, so the CSS
@@ -68,7 +81,7 @@ apex-3d-site/
 ### Accessibility & performance that's already handled
 - `prefers-reduced-motion`: no smooth scroll, no intro, no reveals, no idle wheel spin, and the camera
   cuts between shots instead of orbiting with the scrollbar.
-- Pixel ratio capped at 2; five procedural body styles (the first ships in the main bundle, the other four download only when picked); baked shadow instead of real-time shadows.
+- Pixel ratio capped at 2; five procedural body styles (the first ships with the 3D scene, the other four download only when picked); baked shadow instead of real-time shadows.
 - WebGL check with a fallback message; page still works if the model can't load or the 3D view fails to start.
 - Color buttons are real `<button>`s with labels and `aria-pressed` (they work even without WebGL).
 - Split headings: screen readers (and page translation) read a plain copy of each heading in an
@@ -93,10 +106,10 @@ apex-3d-site/
 Add `?fps` to the URL to see the frame rate, pixel ratio and whether it's drawing. Add `?quality=low` to test the low tier.
 
 ### New effects and where they live
-- **Ignition intro** (`onLoaded` in `main.js`): headlights flicker on, exposure rises, the studio lights sweep over the paint (`look.envSpin` → `scene.environmentRotation`).
-- **Launch control** (`#launch` section + `kmhAt` in `main.js`): a 320vh section with a `position: sticky` HUD. Scroll progress becomes speed; `effects.js` scrolls the road texture and moves 30–120 speed streaks (one `InstancedMesh` = one draw call); the camera shakes and does a dolly zoom (see 2.1).
+- **Ignition intro** (`onLoaded` in `scene.js`): headlights flicker on, exposure rises, the studio lights sweep over the paint (`look.envSpin` → `scene.environmentRotation`).
+- **Launch control** (`#launch` section + `kmhAt` in `page.js`): a 320vh section with a `position: sticky` HUD. Scroll progress becomes speed; `effects.js` scrolls the road texture and moves 30–120 speed streaks (one `InstancedMesh` = one draw call); the camera shakes and does a dolly zoom (see 2.1).
 - **Light glows** (`effects.js`): additive sprites on the head/tail lights = fake bloom without post-processing. They fade out when seen from behind (dot-product test).
-- **Drag to rotate** (`drag` in `main.js`): only in the colors section; eases back afterwards.
+- **Drag to rotate** (`drag` in `scene.js`): only in the colors section; eases back afterwards.
 - **UI motion** (`ui.js`): split-text headlines, progress bar, section dots, custom cursor + magnetic buttons (mouse only), the giant outlined "APEX GT", film grain (high tier).
 - **Motion setting** (`motion.js`): if the system asks for reduced motion (Windows "Animation effects" off), the page stays calm and offers a **Turn on full motion** button. The choice is remembered. `?motion=full` forces it.
 
@@ -107,7 +120,7 @@ Add `?fps` to the URL to see the frame rate, pixel ratio and whether it's drawin
 ### Why it still lagged (and the fixes)
 | Problem | Fix |
 |---|---|
-| Lenis re-checks the OS "reduce motion" setting by itself, so a visitor who picked **full motion** on Windows with animations off got no smoothing: the camera jumped ~100px per wheel notch | `respectReducedMotion: false` in `new Lenis(...)` (main.js): `motion.js` already made the choice |
+| Lenis re-checks the OS "reduce motion" setting by itself, so a visitor who picked **full motion** on Windows with animations off got no smoothing: the camera jumped ~100px per wheel notch | `respectReducedMotion: false` in `new Lenis(...)` (page.js): `motion.js` already made the choice |
 | Chrome, Edge and Safari hide the GPU name (`'WebKit WebGL'`), so laptops with integrated graphics ran on the highest tier | `quality.js` reads the real name from the `WEBGL_debug_renderer_info` extension; `probeGPU()` does this on a throwaway context **before** the renderer exists, so antialias is right from the start |
 | Shaders compiled (and textures uploaded) the first time something appeared: a freeze at the ignition and on entering the launch section | **Warm-up** behind the loader: `renderer.compileAsync(scene, camera)` (it also visits hidden objects like the road and streaks) + `renderer.initTexture()` for the canvas textures |
 | The adaptive resolution used fixed limits: a 30 Hz battery-saver screen sank to the lowest size forever, 45–55 fps was never fixed, and it could bounce up and down | `createAdaptiveResolution` learns the screen's own refresh while nothing is drawn, jumps straight to a size that fits, and stops raising after two bounces |
@@ -115,23 +128,23 @@ Add `?fps` to the URL to see the frame rate, pixel ratio and whether it's drawin
 | On weak devices the floor and the hidden cabin cost a lot of pixels and triangles | Low tier: a flat (unlit) floor and the cabin is hidden (~1/3 of the triangles); the glass uses the cheaper standard material everywhere |
 
 ### New in 2.1 and where it lives
-- **Accent tokens** (`setAccent` in `main.js`, `:root` in `style.css`): `--accent` is the real paint
+- **Accent tokens** (`setAccent` in `page.js`, `:root` in `style.css`): `--accent` is the real paint
   (button fills), `--accent-hi` is for thin lines on black (lighter for very dark paints) and
   `--accent-ink` is the text color on top of the paint (white or near-black, whichever reads better).
   Only plain hex values go into the variables, which keeps older Safari happy.
-- **Reduced motion cuts between shots** (`SHOTS` loop in `main.js`): no scroll-scrubbed orbit and no
+- **Reduced motion cuts between shots** (`SHOTS` loop in `scene.js`): no scroll-scrubbed orbit and no
   light sweep with scroll; each section's camera shot appears as a cut.
-- **Lost GPU context** (`makeEnvironment` in `main.js`): the studio reflections are rebuilt after a
+- **Lost GPU context** (`makeEnvironment` in `scene.js`): the studio reflections are rebuilt after a
   driver reset or sleep/resume.
 - **Motion choice without storage** (`applyChoice` in `motion.js`): if the browser blocks storage, the
   choice rides in the URL (`?motion=full`) instead.
 
 ### Cinematic 3D moments (2.1)
-- **Dolly zoom** (`frame()` in `main.js`): during the launch the lens widens (`fov` 32 → 46) while the
+- **Dolly zoom** (`frame()` in `scene.js`): during the launch the lens widens (`fov` 32 → 46) while the
   camera moves in by exactly the same amount (`dolly`), so the car keeps its size and the road and
   streaks stretch past it, like the "Vertigo" shot in films. Costs nothing on the GPU. Make it calmer
   by lowering the `14` in `32 + s * 14`.
-- **Brakes** (`look.brake` + the `#design` ScrollTrigger in `main.js`): when the launch ends, the
+- **Brakes** (`look.brake` + the `#design` ScrollTrigger in `scene.js`): when the launch ends, the
   tail-light glass gets its own emissive (glowing) copy of the red material, flares, then glows while
   the camera swings round to the rear. Medium/high tier also gets a red pool of light on the floor
   (`spill` in `effects.js`).
@@ -143,17 +156,17 @@ Add `?fps` to the URL to see the frame rate, pixel ratio and whether it's drawin
 - Reduced motion: the lens stays at 32, no tilt, no wheel spin, and the tail lights simply fade on.
 
 ### The 2D layer (2.1)
-- **Loader** (`.loader` in `style.css`, `setLoadProgress` in `main.js`): the A-P-E-X letters rise from
+- **Loader** (`.loader` in `style.css`, `setLoadProgress` in `page.js`): the A-P-E-X letters rise from
   behind a mask and a big counter counts to 100. These are pure CSS animations of `transform`/`opacity`,
   so they keep moving while JavaScript is busy preparing the model. The progress line sits on the
   curtain's bottom edge and grows with `scaleX` (the old bar animated `width`, which re-laid out the
   page on every download event). Screen readers hear only "Loading the car" → "Warming up the engine",
   not every percentage, and everything behind the loader is `inert` (not focusable) until it lifts.
 - **Hero ignition** (`heroMotion` in `ui.js`): one paused GSAP timeline that `onLoaded` plays as the
-  headlights flicker: eyebrow → title lines → sub-line → nav → section dots → scroll hint. `fromTo()`
-  sets the hidden states right away, behind the loader, so the title never flashes. Scrolling down
+  headlights flicker: eyebrow → "control." lights up → sub-line → buttons → nav → section dots → scroll hint.
+  `fromTo()` sets the hidden states right away. The h1 itself is never hidden (it is the LCP element). Scrolling down
   lifts and fades `.hero__inner` (scrubbed, so it rewinds when you scroll back).
-- **Launch instrument cluster** (`#launch` in `index.html`, LAUNCH CONTROL in `main.js`): ticks every
+- **Launch instrument cluster** (`#launch` in `index.html`, LAUNCH CONTROL in `page.js`): ticks every
   30 km/h plus an accent mark at 100 km/h, steady Inter numerals (tabular figures don't wobble), a dark
   instrument face and a soft scrim behind the HUD (painted once, readable over the speed streaks), the
   number turns red from 300 km/h, and the 0–100 badge pulses once when you hit it. The nav and dots
@@ -166,11 +179,11 @@ Add `?fps` to the URL to see the frame rate, pixel ratio and whether it's drawin
 ## Version 2.2: glossy floor + replay
 
 - **Glossy floor** (`src/floor.js`, high tier only): three's `Reflector` renders the scene a second time
-  from a camera mirrored under the floor, into a texture at half the screen size. A small shader blurs it
+  from a camera mirrored under the floor, into a texture at half the CSS size. A small shader blurs it
   (5 samples), fades it out away from the car and *adds* it to the dark floor, so it reads as polished
   concrete. It's a second render pass, so only strong GPUs get it (`reflection` in `quality.js`).
   Try it on any machine with `?quality=high`. Change `strength` and `radius` in `floor.js` to tune it.
-- **Replay the drive** (button at the end, `onReplay` + `ignition()` in `main.js`): Lenis glides back to the
+- **Replay the drive** (button at the end, `onReplay` + `ignition()` in `scene.js`): Lenis glides back to the
   top in 2.6 s (the camera rewinds through every shot because it's tied to the scroll), then the engine
   turns off (lights out, hero text hidden) and the same `ignition()` timeline as the first load plays again.
 
@@ -187,20 +200,21 @@ To try a design, run `npm run dev` and pick it in the "Build yours" section.
 ### The 5 models
 | Button | Model | File |
 |---|---|---|
-| Speedster | GT Speedster | `variant-a.js` (in the main bundle) |
+| Speedster | GT Speedster | `variant-a.js` (loaded with the 3D scene) |
 | Coupé | GT Coupé | `variant-c.js` |
 | Endurance | R Endurance | `variant-d.js` |
 | Electric | E Electric | `variant-e.js` |
 | Tourer | Grand Tourer | `variant-f.js` |
 
 ### How they load
-`src/car/car.js` exports `MODELS`: an `id`, a `name`, a `note` and a `load()` function per car.
-The Speedster is imported normally, so the page opens with it. The other four use `import()`,
+`src/car/models.js` exports `MODELS`: an `id`, a `name`, a `note` and a `load()` function per car.
+It holds no three.js code, so the 2D page can read it. `car.js` imports the Speedster normally (the 3D
+scene opens with it) and passes `MODELS` on. The other four use `import()`,
 so Vite puts each in its own chunk and the browser downloads it only when a visitor picks it.
 (Publishing somewhere by hand? Upload every `dist/assets/*.js` file, or those picks 404.
 `scripts/artifact-page.mjs` prints the list.)
 
-### Swapping cars (`src/main.js`)
+### Swapping cars (`src/scene.js`)
 - `installCar(next)` puts a car on stage: finds the wheels, gives the tail lights their own brake
   material, builds the suspension group, adds the wheel blur discs and moves the light glows
   (`fx.setLights`) to the new car.
@@ -211,11 +225,51 @@ so Vite puts each in its own chunk and the browser downloads it only when a visi
 
 ### Add a sixth model
 1. Copy a variant to `src/car/variant-g.js` and change the shapes. Keep everything `CONTRACT.md` asks for.
-2. Add a line to `MODELS` in `car.js`:
+2. Add a line to `MODELS` in `models.js`:
    `{ id: 'roadster', name: 'GT Roadster', note: '…', load: async () => (await import('./variant-g.js')).createCar }`
 3. Add a button in the `.models` group in `index.html` with the same id:
    `<button class="model-btn" type="button" data-model="roadster" aria-pressed="false">Roadster</button>`
 4. `npm run build`, then pick it on the page.
+
+---
+
+## Version 4: faster first paint, SEO and design polish
+
+- **The poster path never downloads three.js.** `boot.js` loads `page.js` (2D) first and `scene.js`
+  (3D) only on a real GPU. Check it after a build: `grep -l WebGLRenderer dist/assets/page-*.js` finds nothing.
+- **The headline is the LCP element.** The loader curtain (`z-index: 1`) covers the car stage, not the
+  text: `#story` (`z-index: 2`) sits above it, so the h1 shows from the first paint. The loader letters sit
+  top right (centred near the top on phones) so they never sit under the headline.
+- **Fonts are self-hosted.** `public/fonts/` holds one variable woff2 per family (from the
+  `@fontsource-variable` packages). `Syne Fallback` / `Inter Fallback` in `style.css` are Arial resized
+  to the same metrics, so nothing jumps when the real fonts swap in.
+- **No render-blocking CSS.** The `inlineCss` plugin in `vite.config.js` puts the CSS into `index.html`.
+- **Link previews.** `index.html` has a description, canonical URL, Open Graph and Twitter tags, and an
+  inline SVG favicon. `public/og-image.jpg` was made from the poster:
+  `ffmpeg -y -i public/poster-desktop.webp -filter_complex "color=c=0x07070a:s=1590x1000[bg];[bg][0:v]overlay=format=auto,crop=1590:835:0:82,scale=1200:630" -frames:v 1 -q:v 4 public/og-image.jpg`
+- **Real calls to action.** The hero has "Configure yours" and "Watch it launch"; "Reserve yours" opens
+  an honest `<dialog>` (`reserveDialog` in `ui.js`) instead of a dead link.
+- **Keyboard rotate.** The ← → buttons next to "Drag the car to rotate" turn the car 30° (`data-rotate`).
+- **Design system.** Type and spacing tokens on `:root` (`--fs-lead`, `--fs-h2`, `--s-2` … `--s-9`);
+  Performance and Design are editorial blocks (`.panel--bare`) instead of cards; the nav underlines the
+  current section; the dots show their names on hover/focus; a new footer with a giant outlined mark.
+
+### Version 4.1: 3D polish and a lighter runtime (`src/scene.js`)
+- **Studio softboxes.** Three glowing strips (`softbox()`) are added to the `RoomEnvironment` before it is
+  baked into reflections: one long strip overhead, one along each side. They draw crisp highlights down
+  the bonnet and along the shoulders and cost nothing per frame. Too bright? Halve the `power` numbers.
+- **Light sweeps.** A paint change or a model swap tweens `look.envSpin`, so the studio lights glide over
+  the car and reveal the new colour or shape.
+- **Model swap in the dark.** `onModel` downloads the car file, dims the stage, waits two frames so the
+  dark picture is on screen, builds and compiles the car, swaps it, then flickers the headlights on.
+  `page.js` starts the download as soon as the pointer or keyboard focus reaches a body-style button.
+- **Alloy wheels.** `installCar` gives every `rim_*` a lacquered alloy material (`rimMat`) and every `tyre`
+  a rubber one (`tyreMat`). It only touches the wheels, so the car files and `CONTRACT.md` stay the same.
+- **Lighter on the GPU.** The glossy floor's second render pass is skipped while the launch road covers
+  it; its texture is half the CSS size, so resolution changes no longer rebuild it; `floor.js` is only
+  downloaded on the high tier; every tier without the glossy floor (all phones) uses the cheap flat floor.
+- **Smoother start on phones.** `init()` is `async` and pauses (`yieldToMain()`) between the heavy build
+  steps, so taps and scrolls still answer while the 3D builds. Errors from any step show the fallback note.
 
 ---
 
@@ -224,11 +278,11 @@ so Vite puts each in its own chunk and the browser downloads it only when a visi
 **Change the text/colors:** edit `index.html` (copy) and the `--accent` / fonts in `src/style.css`.
 The color swatches are the `data-color` buttons in the `#colors` section.
 
-**Change the camera angles:** edit the `SHOTS` array in `src/main.js`. Tip: with `npm run dev`
+**Change the camera angles:** edit the `SHOTS` array in `src/scene.js`. Tip: with `npm run dev`
 running, open devtools and play with `__debug.shot.theta = 200` to find angles you like.
 
-**Change the car:** each design is a file in `src/car/` that follows `CONTRACT.md`; `src/car/car.js` lists the lineup
-in `MODELS` (the first entry, exported as `createCar`, is the car the page opens with); see 'Version 3' above
+**Change the car:** each design is a file in `src/car/` that follows `CONTRACT.md`; `src/car/models.js` lists the lineup
+in `MODELS` (`car.js` exports the first one as `createCar`, the car the page opens with); see 'Version 3' above
 to add or reorder models. To use a downloaded model instead, load it with `GLTFLoader` and give its parts the names
 from `CONTRACT.md` (check the model's license first — see below).
 
@@ -275,6 +329,7 @@ Then any of these:
 
 **As a Claude artifact:** run `npm run build:artifact`. It builds the site and then runs
 `scripts/artifact-page.mjs`, which writes `dist/apex-motors.html` (one page with the CSS inlined).
+Upload every `dist/assets/*.js` and `dist/fonts/*.woff2` file with it (the script prints the list).
 `vite build` empties `dist/` every time, so after a plain `npm run build` run the script again
 (`node scripts/artifact-page.mjs`).
 

@@ -3,11 +3,11 @@
 
    three's Reflector renders the scene a second time from a camera mirrored
    under the floor, into a texture. We draw that texture on the floor with:
-     · half resolution + a 5-tap blur  -> soft, like polished concrete, not a mirror
+     · half the CSS size + a 5-tap blur  -> soft, like polished concrete, not a mirror
      · a radial fade                   -> the reflection dies out away from the car
      · additive blending               -> it only adds light to the dark floor
    A second render pass costs GPU time, which is why only the "high" tier gets
-   it. Render-on-demand (main.js) also skips this pass whenever nothing moves.
+   it. Render-on-demand (scene.js) also skips this pass whenever nothing moves.
    ========================================================================== */
 import * as THREE from 'three';
 import { Reflector } from 'three/addons/objects/Reflector.js';
@@ -61,7 +61,7 @@ const GlossyFloorShader = {
 export function createGlossyFloor(scene) {
   const mirror = new Reflector(new THREE.CircleGeometry(GlossyFloorShader.uniforms.radius.value, 64), {
     shader: GlossyFloorShader,
-    textureWidth: 512, // resized to half the screen by fit()
+    textureWidth: 512, // resized to half the CSS size by fit()
     textureHeight: 512,
     clipBias: 0.003,
     multisample: 0, // no anti-aliasing needed: we blur it anyway
@@ -77,12 +77,18 @@ export function createGlossyFloor(scene) {
 
   let w = 0;
   let h = 0;
+  const fullStrength = mat.uniforms.strength.value;
   return {
     mirror,
-    // Keep the reflection texture at half the drawing size (called every frame, cheap when unchanged)
-    fit(bufferW, bufferH) {
-      const nw = Math.max(64, Math.round(bufferW * 0.5));
-      const nh = Math.max(64, Math.round(bufferH * 0.5));
+    // 0..1: fades the reflection (scene.js fades it out while the launch road covers the floor)
+    setStrength(k) {
+      mat.uniforms.strength.value = fullStrength * k;
+    },
+    // Keep the reflection texture at half the CSS size (called every frame, cheap when unchanged).
+    // The blur hides the low resolution, and the adaptive DPR changes never reallocate it.
+    fit(cssW, cssH) {
+      const nw = Math.max(64, Math.round(cssW * 0.5));
+      const nh = Math.max(64, Math.round(cssH * 0.5));
       if (nw === w && nh === h) return;
       w = nw;
       h = nh;
