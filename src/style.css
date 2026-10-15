@@ -561,7 +561,7 @@ h2 {
   will-change: transform, opacity; /* own GPU layer: the scrubbed scroll-out never repaints the 168px title */
 }
 .hero__title {
-  font-size: clamp(40px, 11vw, 168px);
+  font-size: clamp(40px, 10vw, 150px);
   margin-bottom: 20px;
   letter-spacing: -0.04em;
   line-height: 0.88;

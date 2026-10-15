@@ -309,7 +309,7 @@ async function build(page) {
        shiftX/shiftY: slide the car left/right/up on screen to make room for text
      ------------------------------------------------------------------------ */
   const SHOTS = [
-    { theta: 140, phi: 76, dist: 9.5, ty: 0.5, shiftX: 0.2, shiftY: 0.08 }, // hero: front 3/4
+    { theta: 140, phi: 76, dist: 11.8, ty: 0.5, shiftX: 0.27, shiftY: 0.08 }, // hero: front 3/4, far enough right that the red headline never sits on the red car
     { theta: 92, phi: 84, dist: 10.5, ty: 0.5, shiftX: 0.2, shiftY: 0.0 }, // performance: side (text left)
     { theta: 158, phi: 85.5, dist: 9, ty: 0.55, shiftX: 0.2, shiftY: 0.03 }, // launch: low front, road ahead
     { theta: -35, phi: 80, dist: 9, ty: 0.5, shiftX: -0.22, shiftY: 0.0 }, // design: rear 3/4 (text right)
