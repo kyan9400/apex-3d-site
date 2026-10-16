@@ -1,9 +1,9 @@
 /* ==========================================================================
    MOTION PREFERENCE
-   Operating systems can ask websites for less motion (Windows: Settings →
-   Accessibility → Visual effects → Animation effects). We respect that by
-   default, but many people turn animations off for speed, not comfort, so the
-   visitor can switch full motion back on. The choice is remembered.
+   Every visit starts in full motion: the 3D is the point of the site. Visitors
+   whose system asks for less motion (Windows: Settings → Accessibility →
+   Visual effects → Animation effects) get a one-time notice offering to calm
+   it down, and anyone can switch with the toggle. The choice is remembered.
      ?motion=full / ?motion=reduced in the URL also works (handy for testing).
    ========================================================================== */
 
@@ -46,7 +46,7 @@ function applyChoice(value) {
 }
 
 const choice = readChoice();
-export const reducedMotion = choice === 'full' ? false : choice === 'reduced' ? true : systemReduced;
+export const reducedMotion = choice === 'reduced';
 
 // CSS uses this class instead of the media query, so the visitor's choice wins
 document.documentElement.classList.toggle('reduce-motion', reducedMotion);
@@ -56,16 +56,16 @@ export function motionControls() {
   toggle.textContent = reducedMotion ? 'Turn on full motion' : 'Reduce motion';
   toggle.addEventListener('click', () => applyChoice(reducedMotion ? 'full' : 'reduced'));
 
-  // First visit with the system setting on: say why things are calm, offer full motion
+  // First visit with the system setting on: say the site plays full motion, offer to calm it down
   if (systemReduced && !choice) {
     const toast = document.getElementById('motion-toast');
     toast.hidden = false;
-    document.getElementById('motion-full').addEventListener('click', () => applyChoice('full'));
+    document.getElementById('motion-full').addEventListener('click', () => applyChoice('reduced'));
     document.getElementById('motion-dismiss').addEventListener('click', () => {
-      if (!saveChoice('reduced')) {
+      if (!saveChoice('full')) {
         // storage blocked: keep the choice in the URL so a refresh doesn't ask again
         const url = new URL(window.location.href);
-        url.searchParams.set('motion', 'reduced');
+        url.searchParams.set('motion', 'full');
         try {
           history.replaceState(null, '', url);
         } catch {

@@ -1488,14 +1488,6 @@ h2 {
   animation: none !important;
   transition-duration: 0.01ms !important;
 }
-/* runs before the JS can add .reduce-motion */
-@media (prefers-reduced-motion: reduce) {
-  .loader__brand span,
-  .loader__text,
-  .loader__count {
-    animation: none;
-  }
-}
 
 /* same breakpoint as above (phones + portrait tablets) */
 @media (max-width: 760px), (max-aspect-ratio: 1/1) {
